@@ -172,7 +172,6 @@ var Sound = (function () {
     extralife: [523, 659, 784],
     frenzy: [440, 554, 880],
     decoy: [587, 494, 587],
-    quake: [196, 165, 147],
     golden: [523, 659, 784, 1047]
   };
   api.chime = function (kind) {
@@ -234,12 +233,6 @@ var Sound = (function () {
   api.select = function () {
     var t = ensure() ? now() : 0;
     tone({ at: t, type: 'square', f0: 880, dur: 0.06, gain: 0.09 });
-  };
-
-  api.rumble = function () {
-    var t = ensure() ? now() : 0;
-    noise({ at: t, dur: 2.6, ff0: 180, ff1: 90, gain: 0.14, attack: 0.3 });
-    tone({ at: t, type: 'sine', f0: 60, f1: 45, dur: 2.4, gain: 0.16, attack: 0.3 });
   };
 
   /* ---------- music: 4-bar chiptune loop, tempo follows difficulty ---------- */

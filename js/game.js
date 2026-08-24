@@ -18,7 +18,6 @@ var ARENA_CX = 640, ARENA_CY = 440;
 
 var MOVE_CD_ABOVE = 0.05;                /* just enough to stop same-frame spam */
 var MOVE_CD_UNDER = 0.04;
-var MOVE_REPEAT   = 0.14;                /* auto-repeat rate while a key is held */
 var BURROW_TIME   = 0.20;                /* invulnerable dive */
 var UNDER_TIME    = 3.0;                 /* surface timer */
 var EJECT_STUN    = 0.40;
@@ -47,7 +46,6 @@ var WILDCARDS = [
   { id: 'extralife', weight: 15, dur: 3, name: 'EXTRA LIFE',    blurb: 'Grab it — above ground!',  color: '#ff5c8a', icon: 'heart' },
   { id: 'frenzy',    weight: 20, dur: 4, name: 'FRENZY MODE',   blurb: 'Triple points. Good luck.',color: '#a45cff', icon: 'bolt' },
   { id: 'decoy',     weight: 15, dur: 4, name: 'DECOY MOLE',    blurb: 'It draws their aim.',      color: '#2fd4d4', icon: 'decoy' },
-  { id: 'quake',     weight: 10, dur: 3, name: 'EARTHQUAKE',    blurb: 'The grid rearranges!',     color: '#c08b52', icon: 'quake' },
   { id: 'golden',    weight: 15, dur: 4, name: 'GOLDEN MOLE',   blurb: '5x points. Untouchable.',  color: '#ffd23f', icon: 'star'  }
 ];
 
@@ -287,8 +285,7 @@ var elapsed = 0;            /* survival time of the current run */
 var autopilot = false;      /* attract-mode AI drives the mole */
 
 var basePos = [];           /* canonical hole positions */
-var holePos = [];           /* current (animated) hole positions */
-var holeTarget = [];        /* where each hole is heading */
+var holePos = [];           /* hole positions (static — the grid never moves) */
 var blocked = [];           /* seconds of lockdown remaining per cell */
 var vulnLeft = [];          /* T at which the mole stopped being vulnerable on a cell */
 
@@ -296,7 +293,7 @@ var mole, hammers, particles, floaters, banners;
 var lives, score, scoreF, displayScore, highScore, newHigh;
 var comboTier, comboTimer, nextMilestone;
 var spawnTimer, wildTimer, wild, decoy, pickup;
-var frenzy, golden, quake;
+var frenzy, golden;
 var shakeMag, shakeTime, shakeDur, flashRed, edgeFlash, dimAmount;
 var stats, firstPlayHintTimer;
 var gameOverT, gameOverPhase, countUp, initials, initialSlot, myRank;
@@ -338,7 +335,6 @@ function buildGrid() {
     }
   }
   holePos = basePos.map(function (p) { return { x: p.x, y: p.y }; });
-  holeTarget = basePos.map(function (p) { return { x: p.x, y: p.y }; });
 }
 
 function pos(i) { return holePos[i]; }
@@ -365,15 +361,13 @@ function resetRun() {
   spawnTimer = 1.1;
   wildTimer = rnd(12, 20);
   wild = null; decoy = null; pickup = null;
-  frenzy = 0; golden = 0; quake = 0;
+  frenzy = 0; golden = 0;
   shakeMag = 0; shakeTime = 0; shakeDur = 1;
   timeScale = 1; slowT = 0; slowDur = 0; slowMin = 1;
-  clearHeld();
   flashRed = 0; edgeFlash = 0; dimAmount = 0;
   stats = { strikes: 0, dodged: 0, closeCalls: 0, longestCombo: 0, hits: 0 };
   firstPlayHintTimer = firstSession ? 9 : 0;
   for (var i = 0; i < NCELLS; i++) { blocked[i] = 0; vulnLeft[i] = -999; }
-  for (i = 0; i < NCELLS; i++) { holeTarget[i] = { x: basePos[i].x, y: basePos[i].y }; }
 }
 
 function moleCell() { return idx(mole.col, mole.row); }
@@ -595,30 +589,7 @@ function tryMove(dx, dy) {
   return true;
 }
 
-/* ---- key-hold repeat ----
-   Every press acts immediately; the cooldown only exists to stop a single frame
-   from eating several moves. Holding a direction repeats at its own slower rate
-   so the mole doesn't rocket across the grid. Nothing is queued: a press that
-   somehow lands inside the cooldown is simply ignored, never replayed later. */
-var heldDirs = [];          /* direction key codes, most recent last */
-var repeatTimer = MOVE_REPEAT;
 
-function heldDir() {
-  for (var i = heldDirs.length - 1; i >= 0; i--) {
-    var d = DIRS[heldDirs[i]];
-    if (d) return d;
-  }
-  return null;
-}
-
-function consumeMoveInput(dt) {
-  var d = heldDir();
-  if (!d) { repeatTimer = MOVE_REPEAT; return; }
-  repeatTimer -= dt;
-  if (repeatTimer > 0) return;
-  if (mole.moveCd > 0 || mole.stun > 0 || mole.state === 'burrowing') return;
-  if (tryMove(d[0], d[1])) repeatTimer = MOVE_REPEAT;
-}
 
 function tryBurrowToggle() {
   var m = mole;
@@ -1027,6 +998,7 @@ function startWildcard() {
   } else if (def.id === 'extralife') {
     var candidates = [];
     for (i = 0; i < NCELLS; i++) if (blocked[i] <= 0) candidates.push(i);
+    if (!candidates.length) candidates = [moleCell()];   /* every hole boarded up */
     pickup = { cell: pick(candidates), t: 0, dur: def.dur, taken: 0 };
 
   } else if (def.id === 'frenzy') {
@@ -1040,14 +1012,6 @@ function startWildcard() {
     p = pos(decoy.cell);
     dustPuff(p.x, p.y - 6, 8, { color: '#2fd4d4', size: 0.9 });
 
-  } else if (def.id === 'quake') {
-    quake = def.dur;
-    var perm = shuffled([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
-    for (i = 0; i < NCELLS; i++) {
-      holeTarget[i] = { x: basePos[perm[i]].x, y: basePos[perm[i]].y };
-    }
-    Sound.rumble();
-
   } else if (def.id === 'golden') {
     golden = def.dur;
   }
@@ -1055,11 +1019,6 @@ function startWildcard() {
 
 function endWildcard() {
   if (!wild) return;
-  if (wild.id === 'quake') {
-    for (var i = 0; i < NCELLS; i++) {
-      holeTarget[i] = { x: basePos[i].x, y: basePos[i].y };
-    }
-  }
   wild = null;
 }
 
@@ -1079,7 +1038,6 @@ function updateWildcards(dt) {
     p = pos(moleCell());
     if (Math.random() < dt * 34) sparkle(p.x + rnd(-40, 40), p.y - rnd(10, 90), '#ffd23f');
   }
-  if (quake > 0) quake -= dt;
 
   if (decoy) {
     decoy.t += dt;
@@ -1122,13 +1080,6 @@ function updateWildcards(dt) {
     if (wildTimer <= 0) startWildcard();
   }
 
-  /* animate hole positions (earthquake shuffle / settle back) */
-  var k = Math.min(1, dt * 7);
-  for (i = 0; i < NCELLS; i++) {
-    holePos[i].x += (holeTarget[i].x - holePos[i].x) * k;
-    holePos[i].y += (holeTarget[i].y - holePos[i].y) * k;
-  }
-  if (quake > 0) shake(5, 0.12);
 }
 
 /* ------------------------------------------------------------
@@ -1262,7 +1213,6 @@ function simulate(dt) {
     elapsed += dt;
   }
 
-  if (!autopilot) consumeMoveInput(dt);
   updateMole(dt);
   updateHammers(dt);
 
@@ -1270,11 +1220,6 @@ function simulate(dt) {
     updateWildcards(dt);
   } else {
     for (var i = 0; i < NCELLS; i++) if (blocked[i] > 0) blocked[i] -= dt;
-    var k = Math.min(1, dt * 7);
-    for (i = 0; i < NCELLS; i++) {
-      holePos[i].x += (holeTarget[i].x - holePos[i].x) * k;
-      holePos[i].y += (holeTarget[i].y - holePos[i].y) * k;
-    }
   }
 
   var d = difficulty();
@@ -1413,12 +1358,10 @@ function onKeyDown(e) {
   }
 
   if (state === S.PLAYING) {
-    if (code === 'Escape') { state = S.PAUSED; clearHeld(); Sound.stopMusic(0.2); return; }
+    if (code === 'Escape') { state = S.PAUSED; Sound.stopMusic(0.2); return; }
     var d = DIRS[code];
     if (d) {
-      if (heldDirs.indexOf(code) < 0) heldDirs.push(code);
-      repeatTimer = MOVE_REPEAT;
-      tryMove(d[0], d[1]);
+      tryMove(d[0], d[1]);      /* one press, one step — no repeat, no queue */
       return;
     }
     if (code === 'Space') { tryBurrowToggle(); return; }
@@ -1459,16 +1402,7 @@ function onKeyDown(e) {
   }
 }
 
-function onKeyUp(e) {
-  var code = keyName(e);
-  var i = heldDirs.indexOf(code);
-  if (i >= 0) heldDirs.splice(i, 1);
-}
-function clearHeld() { heldDirs.length = 0; repeatTimer = MOVE_REPEAT; }
-
 window.addEventListener('keydown', onKeyDown, { passive: false });
-window.addEventListener('keyup', onKeyUp);
-window.addEventListener('blur', clearHeld);
 
 /* Clicking/tapping the canvas also unlocks audio and acts as "start". */
 canvas.addEventListener('pointerdown', function () {
@@ -1488,19 +1422,7 @@ document.addEventListener('visibilitychange', function () {
    14. Rendering — arena pieces
    ------------------------------------------------------------ */
 
-function quakeJitter(i) {
-  if (quake <= 0) return { x: 0, y: 0 };
-  var k = Math.min(1, quake / 0.6);
-  return {
-    x: Math.sin(T * 41 + i * 1.7) * 5 * k,
-    y: Math.cos(T * 37 + i * 2.3) * 4 * k
-  };
-}
-
-function hp(i) {
-  var p = holePos[i], j = quakeJitter(i);
-  return { x: p.x + j.x, y: p.y + j.y };
-}
+function hp(i) { return holePos[i]; }
 
 function drawHole(i) {
   var p = hp(i);
@@ -2747,13 +2669,11 @@ window.__game = {
   get blocked() { return blocked; },
   get frenzy() { return frenzy; },
   get golden() { return golden; },
-  get quake() { return quake; },
   get decoy() { return decoy; },
   get pickup() { return pickup; },
   get comboTier() { return comboTier; },
   get timeScale() { return timeScale; },
   get menuIndex() { return menuIndex; },
-  get heldDirs() { return heldDirs.slice(); },
   get autopilot() { return autopilot; },
   slowMo: function (m, d) { slowMo(m, d); },
   moleCell: function () { return moleCell(); },
@@ -2765,7 +2685,7 @@ window.__game = {
   },
   clearInvuln: function () { mole.invuln = 0; mole.stun = 0; mole.dazed = 0; },
   clearBlocked: function () { for (var i = 0; i < NCELLS; i++) blocked[i] = 0; },
-  clearWildcard: function () { endWildcard(); frenzy = 0; golden = 0; quake = 0; decoy = null; pickup = null; wildTimer = 9999; },
+  clearWildcard: function () { endWildcard(); frenzy = 0; golden = 0; decoy = null; pickup = null; wildTimer = 9999; },
   freezeWildcards: function () { wildTimer = 999999; },
   setSpawn: function (v) { spawnTimer = v; },
   holePos: function () { return holePos; },
@@ -2785,6 +2705,7 @@ window.__game = {
     for (var i = 0; i < saved.length; i++) WILDCARDS.push(saved[i]);
     return true;
   },
+  forceRandomWildcard: function () { if (wild) endWildcard(); startWildcard(); },
   setElapsed: function (v) { elapsed = v; },
   spawnHammerAt: function (cell, warn) { spawnHammer(cell, warn === undefined ? 1 : warn, 0); },
   clearHammers: function () { hammers.length = 0; },

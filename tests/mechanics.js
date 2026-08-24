@@ -98,16 +98,15 @@
     ok('a dropped press is never replayed later', G.mole.col === 1, 'col=' + G.mole.col);
 
     G.setMole(0, 1, 'above');
-    await wait(200);
-    hold('ArrowRight');
-    await wait(500);                           /* one immediate step + ~3 repeats */
-    release('ArrowRight');
-    var glided = G.mole.col;
-    ok('holding a direction keeps stepping across the grid', glided >= 2,
-       'col=' + glided);
-    await wait(300);
-    ok('movement stops once the key is released', G.mole.col === glided,
+    await wait(120);
+    hold('ArrowRight');                        /* held down, never released */
+    await wait(600);
+    ok('holding a direction moves exactly one step', G.mole.col === 1,
        'col=' + G.mole.col);
+    release('ArrowRight');
+    await wait(120);
+    press('ArrowRight');
+    ok('the next press steps again', G.mole.col === 2, 'col=' + G.mole.col);
 
     /* ---- slow motion ---- */
     freshGame();
@@ -224,7 +223,7 @@
        'closeCalls ' + cc0 + '->' + G.stats.closeCalls +
        ' state=' + G.state + ' cell=' + G.moleCell() + ' mole=' + G.mole.state +
        ' lives=' + G.lives + ' scale=' + G.timeScale.toFixed(2) +
-       ' held=' + JSON.stringify(G.heldDirs) + ' auto=' + G.autopilot);
+       ' auto=' + G.autopilot);
     ok('close call awards ~25 points', G.score - sc0 >= 25, 'delta=' + (G.score - sc0));
     ok('combo tier 1 after first close call', G.comboTier === 1, 'tier=' + G.comboTier);
 
@@ -350,12 +349,17 @@
     ok('decoy mole appears', !!G.decoy && G.decoy.cell !== G.moleCell(), G.decoy && G.decoy.cell);
 
     G.clearWildcard();
-    var before = G.holePos().map(function (p) { return p.x + ',' + p.y; }).join('|');
-    G.forceWildcard('quake');
-    await wait(500);
-    var after = G.holePos().map(function (p) { return p.x + ',' + p.y; }).join('|');
-    ok('earthquake rearranges the grid', before !== after, 'moved');
-    ok('earthquake is timed', G.quake > 0, G.quake);
+    var ids = ['lockdown', 'extralife', 'frenzy', 'decoy', 'golden'];
+    var pool = [];
+    for (var w = 0; w < 400; w++) {
+      G.clearWildcard();
+      G.clearBlocked();          /* don't let repeated lockdowns stack up */
+      G.forceRandomWildcard();
+      if (G.wild && pool.indexOf(G.wild.id) < 0) pool.push(G.wild.id);
+    }
+    pool.sort();
+    ok('wildcard pool is exactly the five remaining events',
+       pool.join(',') === ids.slice().sort().join(','), pool.join(','));
 
     G.clearWildcard();
     G.forceWildcard('extralife');

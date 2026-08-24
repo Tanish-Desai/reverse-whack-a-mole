@@ -20,7 +20,7 @@ python3 -m http.server 8123
 
 | Input | Action |
 |---|---|
-| Arrow keys / WASD | Move one hole (hold to keep stepping) |
+| Arrow keys / WASD | Move one hole (one press, one step) |
 | Space | Burrow / surface, and confirm on menus |
 | Up / Down | Choose a title menu item |
 | Enter | Confirm (menus, initials) |
@@ -44,19 +44,18 @@ Everything in the spec's Must-Have, Should-Have and Nice-to-Have lists:
 4x3 grid, three mole states, 3s surface timer with forced eject, hammer
 telegraph/strike/recovery, all seven targeting patterns, lives and damage,
 passive + close-call + combo + milestone scoring, the continuous difficulty
-ramp, all six wildcards, title / tutorial / pause / game-over screens,
+ramp, five wildcards, title / tutorial / pause / game-over screens,
 a top-10 localStorage leaderboard with arcade initials entry, particles,
 screen shake, and synthesised audio.
 
 ## Feel notes
 
-- **Movement is immediate.** The spec suggests a ~150ms move cooldown to stop
+- **One press, one step.** The spec suggests a ~150ms move cooldown to stop
   spam-teleporting; that read as input lag, so the cooldown is down to 50ms —
   enough to keep a single frame from eating several moves, short enough to be
-  imperceptible. Nothing is queued: a press that lands inside the cooldown is
-  dropped, never replayed later. Holding a direction repeats at its own slower
-  rate (`MOVE_REPEAT`, 140ms) so the mole doesn't rocket across the grid.
-  Tune `MOVE_CD_ABOVE`, `MOVE_CD_UNDER` and `MOVE_REPEAT` at the top of
+  imperceptible. Nothing is queued and nothing repeats: a press that lands
+  inside the cooldown is dropped rather than replayed, and holding a direction
+  moves exactly one hole. Tune `MOVE_CD_ABOVE` / `MOVE_CD_UNDER` at the top of
   `js/game.js`.
 - **Slow motion** punctuates the dramatic beats. `slowMo(scale, duration)` drops
   the simulation to `scale` speed, holds for the first third, then eases back to
@@ -79,7 +78,14 @@ screen shake, and synthesised audio.
   three-step tutorial and returns to the menu; on a first-ever play the tutorial
   runs automatically and hands off straight into a run.
 
-## Spec interpretations
+## Deviations from the spec
+
+- **Earthquake was cut.** The spec's sixth wildcard scrambled hole positions
+  while movement stayed grid-logical. It read as unintuitive rather than
+  challenging, so it's gone along with the hole-animation layer that only
+  existed to serve it — the grid is now static. The remaining five weights
+  (25/15/20/15/15) are normalised against their own total, so no re-tuning was
+  needed; each event just became proportionally more likely.
 
 A few places where the spec left room, and what was chosen:
 
@@ -94,9 +100,6 @@ A few places where the spec left room, and what was chosen:
   the interval so late game reads as constant pressure rather than
   wall-then-silence. Row sweeps, column slams and crosses are exempt from the
   cap so a set piece is never cut off half way.
-- **Earthquake.** Holes scramble to new screen positions for the duration and
-  animate back afterwards. Movement stays grid-logical throughout — that's the
-  disorientation. A permanent scramble would compound across repeat events.
 - **Surfacing.** Burrowing has its specified ~200ms invulnerable transition;
   popping back up is immediate, so tapping Space can't be used as an extra
   dodge on top of the burrow.
@@ -111,9 +114,9 @@ With the server running, in the browser console:
 
 ```js
 fetch('/tests/mechanics.js').then(r => r.text()).then(eval)
-await runTests()      // 68 assertions: movement, input response and key-hold,
-                      // timers, damage, scoring, difficulty, slow motion,
-                      // all six wildcards, title menu, leaderboard, pause
+await runTests()      // 67 assertions: movement and input response, timers,
+                      // damage, scoring, difficulty, slow motion, the five
+                      // wildcards, title menu, leaderboard, pause
 ```
 
 ```js
