@@ -50,11 +50,14 @@ screen shake, and synthesised audio.
 
 ## Feel notes
 
-- **Movement input is buffered.** The spec's ~150ms move cooldown is still there,
-  but a press that lands during it is remembered and replayed the instant it
-  clears, and holding a direction keeps stepping. Previously those presses were
-  dropped, which read as input lag rather than as pacing. Tune with
-  `MOVE_CD_ABOVE` and `MOVE_BUFFER` at the top of `js/game.js`.
+- **Movement is immediate.** The spec suggests a ~150ms move cooldown to stop
+  spam-teleporting; that read as input lag, so the cooldown is down to 50ms —
+  enough to keep a single frame from eating several moves, short enough to be
+  imperceptible. Nothing is queued: a press that lands inside the cooldown is
+  dropped, never replayed later. Holding a direction repeats at its own slower
+  rate (`MOVE_REPEAT`, 140ms) so the mole doesn't rocket across the grid.
+  Tune `MOVE_CD_ABOVE`, `MOVE_CD_UNDER` and `MOVE_REPEAT` at the top of
+  `js/game.js`.
 - **Slow motion** punctuates the dramatic beats. `slowMo(scale, duration)` drops
   the simulation to `scale` speed, holds for the first third, then eases back to
   full. Current triggers:
@@ -108,7 +111,7 @@ With the server running, in the browser console:
 
 ```js
 fetch('/tests/mechanics.js').then(r => r.text()).then(eval)
-await runTests()      // 65 assertions: movement, input buffering and key-hold,
+await runTests()      // 68 assertions: movement, input response and key-hold,
                       // timers, damage, scoring, difficulty, slow motion,
                       // all six wildcards, title menu, leaderboard, pause
 ```

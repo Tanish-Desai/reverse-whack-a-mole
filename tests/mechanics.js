@@ -79,22 +79,28 @@
     press('KeyW');
     ok('WASD moves + clamps at top row', G.mole.row === 0, 'row=' + G.mole.row);
 
-    /* ---- input feel: buffering and key-hold repeat ---- */
+    /* ---- input feel: immediacy and key-hold repeat ---- */
     G.setMole(0, 1, 'above');
-    await wait(200);
-    press('ArrowRight');                       /* moves immediately */
-    var afterFirst = G.mole.col;
-    press('ArrowRight');                       /* lands during the cooldown */
-    ok('press during cooldown is buffered, not dropped',
-       G.mole.col === afterFirst, 'col=' + G.mole.col);
-    await wait(220);
-    ok('buffered press replays when the cooldown clears',
-       G.mole.col === afterFirst + 1, 'col=' + G.mole.col);
+    await wait(120);
+    press('ArrowRight');
+    ok('a press moves the mole immediately', G.mole.col === 1, 'col=' + G.mole.col);
+    await wait(80);                            /* longer than the 50ms cooldown */
+    press('ArrowRight');
+    ok('a second press lands as soon as the short cooldown clears',
+       G.mole.col === 2, 'col=' + G.mole.col);
+
+    G.setMole(0, 1, 'above');
+    await wait(120);
+    press('ArrowRight');
+    press('ArrowRight');                       /* same instant — inside the cooldown */
+    ok('same-instant spam is dropped, not queued', G.mole.col === 1, 'col=' + G.mole.col);
+    await wait(300);
+    ok('a dropped press is never replayed later', G.mole.col === 1, 'col=' + G.mole.col);
 
     G.setMole(0, 1, 'above');
     await wait(200);
     hold('ArrowRight');
-    await wait(500);                           /* ~3 cooldowns worth */
+    await wait(500);                           /* one immediate step + ~3 repeats */
     release('ArrowRight');
     var glided = G.mole.col;
     ok('holding a direction keeps stepping across the grid', glided >= 2,
@@ -171,11 +177,11 @@
     press('ArrowRight');
     ok('cannot move while stunned', G.mole.col === colBefore, 'col=' + G.mole.col);
     await wait(600);
-    var colAfterStun = G.mole.col;   /* the buffered press may have replayed here */
+    ok('a press swallowed by the stun is not replayed', G.mole.col === colBefore,
+       'col=' + G.mole.col);
     press('ArrowRight');
     await wait(60);
-    ok('can move once the stun ends', G.mole.col === colAfterStun + 1,
-       colAfterStun + '->' + G.mole.col);
+    ok('can move once the stun ends', G.mole.col === colBefore + 1, 'col=' + G.mole.col);
 
     /* ---- hammer hit + invulnerability ---- */
     freshGame();

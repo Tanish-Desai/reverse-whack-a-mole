@@ -16,8 +16,9 @@ var HOLE_RX = 66, HOLE_RY = 31;
 var SPACING_X = 232, SPACING_Y = 176;
 var ARENA_CX = 640, ARENA_CY = 440;
 
-var MOVE_CD_ABOVE = 0.15;                /* anti spam-teleport */
-var MOVE_CD_UNDER = 0.10;
+var MOVE_CD_ABOVE = 0.05;                /* just enough to stop same-frame spam */
+var MOVE_CD_UNDER = 0.04;
+var MOVE_REPEAT   = 0.14;                /* auto-repeat rate while a key is held */
 var BURROW_TIME   = 0.20;                /* invulnerable dive */
 var UNDER_TIME    = 3.0;                 /* surface timer */
 var EJECT_STUN    = 0.40;
@@ -594,18 +595,13 @@ function tryMove(dx, dy) {
   return true;
 }
 
-/* ---- input buffering ----
-   A press that lands during the move cooldown is remembered and replayed the
-   instant the cooldown clears, and a held direction keeps stepping. Without
-   this the cooldown reads as dropped inputs rather than as pacing. */
+/* ---- key-hold repeat ----
+   Every press acts immediately; the cooldown only exists to stop a single frame
+   from eating several moves. Holding a direction repeats at its own slower rate
+   so the mole doesn't rocket across the grid. Nothing is queued: a press that
+   somehow lands inside the cooldown is simply ignored, never replayed later. */
 var heldDirs = [];          /* direction key codes, most recent last */
-var bufDir = null, bufTime = 0;
-var MOVE_BUFFER = 0.22;
-
-function requestMove(d) {
-  if (!tryMove(d[0], d[1])) { bufDir = d; bufTime = MOVE_BUFFER; }
-  else { bufDir = null; bufTime = 0; }
-}
+var repeatTimer = MOVE_REPEAT;
 
 function heldDir() {
   for (var i = heldDirs.length - 1; i >= 0; i--) {
@@ -616,11 +612,12 @@ function heldDir() {
 }
 
 function consumeMoveInput(dt) {
-  if (bufTime > 0) bufTime -= dt;
+  var d = heldDir();
+  if (!d) { repeatTimer = MOVE_REPEAT; return; }
+  repeatTimer -= dt;
+  if (repeatTimer > 0) return;
   if (mole.moveCd > 0 || mole.stun > 0 || mole.state === 'burrowing') return;
-  var d = (bufTime > 0 && bufDir) ? bufDir : heldDir();
-  if (!d) return;
-  if (tryMove(d[0], d[1])) { bufDir = null; bufTime = 0; }
+  if (tryMove(d[0], d[1])) repeatTimer = MOVE_REPEAT;
 }
 
 function tryBurrowToggle() {
@@ -1420,7 +1417,8 @@ function onKeyDown(e) {
     var d = DIRS[code];
     if (d) {
       if (heldDirs.indexOf(code) < 0) heldDirs.push(code);
-      requestMove(d);
+      repeatTimer = MOVE_REPEAT;
+      tryMove(d[0], d[1]);
       return;
     }
     if (code === 'Space') { tryBurrowToggle(); return; }
@@ -1466,7 +1464,7 @@ function onKeyUp(e) {
   var i = heldDirs.indexOf(code);
   if (i >= 0) heldDirs.splice(i, 1);
 }
-function clearHeld() { heldDirs.length = 0; bufDir = null; bufTime = 0; }
+function clearHeld() { heldDirs.length = 0; repeatTimer = MOVE_REPEAT; }
 
 window.addEventListener('keydown', onKeyDown, { passive: false });
 window.addEventListener('keyup', onKeyUp);
