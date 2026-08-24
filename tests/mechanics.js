@@ -7,8 +7,18 @@
   var errors = [];
   window.addEventListener('error', function (e) { errors.push(String(e.message)); });
 
+  /* A tap: keydown immediately followed by keyup, like a real key press. */
   function press(code, key) {
+    hold(code, key);
+    release(code, key);
+  }
+  function hold(code, key) {
     window.dispatchEvent(new KeyboardEvent('keydown', {
+      code: code, key: key || code, bubbles: true, cancelable: true
+    }));
+  }
+  function release(code, key) {
+    window.dispatchEvent(new KeyboardEvent('keyup', {
       code: code, key: key || code, bubbles: true, cancelable: true
     }));
   }
@@ -17,6 +27,25 @@
     results.push({ name: name, pass: !!cond, detail: detail === undefined ? '' : String(detail) });
   }
   function near(a, b, tol) { return Math.abs(a - b) <= tol; }
+  /* Scoring is measured in wall-clock time, so wait out any slow motion first. */
+  /* Waits until the hammer on `cell` is `lead` seconds from striking, so dodge
+     timing never depends on setTimeout drift. */
+  async function dodgeMoment(cell, lead) {
+    for (var i = 0; i < 400; i++) {
+      var hs = G.hammers;
+      for (var j = 0; j < hs.length; j++) {
+        if (hs[j].cell === cell && hs[j].phase === 'warn' &&
+            hs[j].warn - hs[j].t <= lead) return true;
+      }
+      await wait(8);
+    }
+    return false;
+  }
+  async function fullSpeed() {
+    await wait(80);                        /* let any just-fired slowdown register */
+    for (var i = 0; i < 80 && G.timeScale < 0.995; i++) await wait(50);
+    await wait(40);
+  }
 
   function freshGame() {
     G.startGame();
@@ -50,6 +79,66 @@
     press('KeyW');
     ok('WASD moves + clamps at top row', G.mole.row === 0, 'row=' + G.mole.row);
 
+    /* ---- input feel: buffering and key-hold repeat ---- */
+    G.setMole(0, 1, 'above');
+    await wait(200);
+    press('ArrowRight');                       /* moves immediately */
+    var afterFirst = G.mole.col;
+    press('ArrowRight');                       /* lands during the cooldown */
+    ok('press during cooldown is buffered, not dropped',
+       G.mole.col === afterFirst, 'col=' + G.mole.col);
+    await wait(220);
+    ok('buffered press replays when the cooldown clears',
+       G.mole.col === afterFirst + 1, 'col=' + G.mole.col);
+
+    G.setMole(0, 1, 'above');
+    await wait(200);
+    hold('ArrowRight');
+    await wait(500);                           /* ~3 cooldowns worth */
+    release('ArrowRight');
+    var glided = G.mole.col;
+    ok('holding a direction keeps stepping across the grid', glided >= 2,
+       'col=' + glided);
+    await wait(300);
+    ok('movement stops once the key is released', G.mole.col === glided,
+       'col=' + G.mole.col);
+
+    /* ---- slow motion ---- */
+    freshGame();
+    G.setMole(1, 1, 'above');
+    G.clearHammers();
+    G.clearInvuln();
+    G.spawnHammerAt(G.moleCell(), 0.15);
+    await wait(400);
+    ok('getting hit triggers slow motion', G.timeScale < 0.6,
+       'timeScale=' + G.timeScale.toFixed(2));
+    await wait(1000);
+    ok('slow motion eases back to full speed', G.timeScale > 0.98,
+       'timeScale=' + G.timeScale.toFixed(2));
+
+    freshGame();
+    G.setMole(1, 1, 'above');
+    G.forceWildcard('frenzy');
+    await wait(120);
+    ok('wildcard announcement triggers slow motion', G.timeScale < 0.6,
+       'timeScale=' + G.timeScale.toFixed(2));
+    await wait(1800);
+    ok('speed restored after the announcement', G.timeScale > 0.98,
+       'timeScale=' + G.timeScale.toFixed(2));
+
+    /* ---- title menu ---- */
+    G.goTitle();
+    ok('title starts on START GAME', G.menuIndex === 0, G.menuIndex);
+    press('ArrowDown');
+    ok('arrow keys move the title selection', G.menuIndex === 1, G.menuIndex);
+    press('Space');
+    ok('HOW TO PLAY opens the tutorial', G.state === 'TUTORIAL', G.state);
+    press('Space');                            /* space skips the tutorial */
+    ok('tutorial opened from the menu returns to the title', G.state === 'TITLE', G.state);
+    ok('returning to the title resets the selection', G.menuIndex === 0, G.menuIndex);
+    press('Space');
+    ok('START GAME starts a run', G.state === 'PLAYING', G.state);
+
     /* ---- burrow / surface timer ---- */
     G.setMole(1, 1, 'above');
     press('Space');
@@ -81,9 +170,12 @@
     var colBefore = G.mole.col;
     press('ArrowRight');
     ok('cannot move while stunned', G.mole.col === colBefore, 'col=' + G.mole.col);
-    await wait(500);
+    await wait(600);
+    var colAfterStun = G.mole.col;   /* the buffered press may have replayed here */
     press('ArrowRight');
-    ok('can move once the stun ends', G.mole.col === colBefore + 1, 'col=' + G.mole.col);
+    await wait(60);
+    ok('can move once the stun ends', G.mole.col === colAfterStun + 1,
+       colAfterStun + '->' + G.mole.col);
 
     /* ---- hammer hit + invulnerability ---- */
     freshGame();
@@ -116,21 +208,27 @@
     G.setMole(1, 1, 'above');
     G.clearInvuln();
     var cc0 = G.stats.closeCalls, sc0 = G.score;
-    G.spawnHammerAt(G.moleCell(), 0.4);
-    await wait(250);
-    press('ArrowRight');                       /* dodge with ~0.15s to spare */
-    await wait(350);
+    var ccCell = G.moleCell();
+    G.spawnHammerAt(ccCell, 0.5);
+    var reached = await dodgeMoment(ccCell, 0.18);
+    ok('telegraph observed before the strike', reached, 'reached=' + reached);
+    press('ArrowRight');                       /* dodge with ~0.18s to spare */
+    await wait(500);
     ok('close call registered', G.stats.closeCalls === cc0 + 1,
-       'closeCalls ' + cc0 + '->' + G.stats.closeCalls);
+       'closeCalls ' + cc0 + '->' + G.stats.closeCalls +
+       ' state=' + G.state + ' cell=' + G.moleCell() + ' mole=' + G.mole.state +
+       ' lives=' + G.lives + ' scale=' + G.timeScale.toFixed(2) +
+       ' held=' + JSON.stringify(G.heldDirs) + ' auto=' + G.autopilot);
     ok('close call awards ~25 points', G.score - sc0 >= 25, 'delta=' + (G.score - sc0));
     ok('combo tier 1 after first close call', G.comboTier === 1, 'tier=' + G.comboTier);
 
     G.clearHammers();
     await wait(200);
-    G.spawnHammerAt(G.moleCell(), 0.4);
-    await wait(250);
+    var ccCell2 = G.moleCell();
+    G.spawnHammerAt(ccCell2, 0.5);
+    await dodgeMoment(ccCell2, 0.18);
     press('ArrowLeft');
-    await wait(350);
+    await wait(500);
     ok('second close call within 3s raises combo to x2', G.comboTier === 2, 'tier=' + G.comboTier);
     ok('longest combo stat tracked', G.stats.longestCombo >= 2, G.stats.longestCombo);
 
@@ -139,6 +237,7 @@
 
     /* ---- scoring rate ---- */
     freshGame();
+    await fullSpeed();
     G.setMole(1, 1, 'above');
     G.clearHammers();
     var s0 = G.score;
@@ -211,11 +310,15 @@
     G.clearWildcard(); G.clearBlocked();
     G.forceWildcard('frenzy');
     ok('frenzy activates', G.frenzy > 0, G.frenzy);
+    await fullSpeed();
     G.setMole(1, 1, 'above');
+    var tsAtStart = G.timeScale;
     var f0 = G.score;
     await wait(900);
     var frate = (G.score - f0) / 0.9;
-    ok('frenzy triples the scoring rate', frate > 25 && frate < 36, 'rate=' + frate.toFixed(1));
+    ok('frenzy triples the scoring rate', frate > 25 && frate < 36,
+       'rate=' + frate.toFixed(1) + ' scaleAtStart=' + tsAtStart.toFixed(2) +
+       ' scaleNow=' + G.timeScale.toFixed(2) + ' frenzyLeft=' + G.frenzy.toFixed(2));
     ok('frenzy halves the warning time', near(G.difficulty().warn, 0.5, 0.01),
        G.difficulty().warn);
 
@@ -224,6 +327,7 @@
     G.setMole(1, 1, 'above');
     G.forceWildcard('golden');
     ok('golden mole activates', G.golden > 0, G.golden);
+    await fullSpeed();
     var glives = G.lives;
     G.clearHammers();
     G.spawnHammerAt(G.moleCell(), 0.2);
@@ -231,7 +335,9 @@
     await wait(900);
     ok('golden mole is invulnerable', G.lives === glives, 'lives=' + G.lives);
     var grate = (G.score - g0) / 0.9;
-    ok('golden mole scores at 5x', grate > 42 && grate < 58, 'rate=' + grate.toFixed(1));
+    ok('golden mole scores at 5x', grate > 42 && grate < 58,
+       'rate=' + grate.toFixed(1) + ' scaleNow=' + G.timeScale.toFixed(2) +
+       ' goldenLeft=' + G.golden.toFixed(2));
 
     G.clearWildcard();
     G.forceWildcard('decoy');

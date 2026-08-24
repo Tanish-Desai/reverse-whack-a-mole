@@ -20,8 +20,9 @@ python3 -m http.server 8123
 
 | Input | Action |
 |---|---|
-| Arrow keys / WASD | Move one hole |
-| Space | Burrow / surface |
+| Arrow keys / WASD | Move one hole (hold to keep stepping) |
+| Space | Burrow / surface, and confirm on menus |
+| Up / Down | Choose a title menu item |
 | Enter | Confirm (menus, initials) |
 | Esc | Pause |
 | M | Mute |
@@ -46,6 +47,34 @@ passive + close-call + combo + milestone scoring, the continuous difficulty
 ramp, all six wildcards, title / tutorial / pause / game-over screens,
 a top-10 localStorage leaderboard with arcade initials entry, particles,
 screen shake, and synthesised audio.
+
+## Feel notes
+
+- **Movement input is buffered.** The spec's ~150ms move cooldown is still there,
+  but a press that lands during it is remembered and replayed the instant it
+  clears, and holding a direction keeps stepping. Previously those presses were
+  dropped, which read as input lag rather than as pacing. Tune with
+  `MOVE_CD_ABOVE` and `MOVE_BUFFER` at the top of `js/game.js`.
+- **Slow motion** punctuates the dramatic beats. `slowMo(scale, duration)` drops
+  the simulation to `scale` speed, holds for the first third, then eases back to
+  full. Current triggers:
+
+  | Event | Scale | Duration |
+  |---|---|---|
+  | Mole gets bonked | 0.22 | 0.75s |
+  | Wildcard announcement | 0.30 | 1.5s |
+  | Survival milestone | 0.45 | 0.9s |
+  | Death | 0.18 | 1.1s |
+
+  The UI clock, the banners and the score roll-up stay on real time, so an
+  announcement never outstays its welcome just because the world slowed down.
+  Music tempo sags with the slowdown, and a blue vignette closes in as a cue.
+- **Announcements sit above the arena**, in the gap between the HUD bar and the
+  top row of holes, so they never cover a hole you have to read — and the
+  slowdown gives you time to take them in without the game running away.
+- **Title menu** has START GAME and HOW TO PLAY. The latter runs the same
+  three-step tutorial and returns to the menu; on a first-ever play the tutorial
+  runs automatically and hands off straight into a run.
 
 ## Spec interpretations
 
@@ -79,8 +108,9 @@ With the server running, in the browser console:
 
 ```js
 fetch('/tests/mechanics.js').then(r => r.text()).then(eval)
-await runTests()      // 50 assertions: movement, timers, damage, scoring,
-                      // difficulty, all six wildcards, leaderboard, pause
+await runTests()      // 65 assertions: movement, input buffering and key-hold,
+                      // timers, damage, scoring, difficulty, slow motion,
+                      // all six wildcards, title menu, leaderboard, pause
 ```
 
 ```js
@@ -89,7 +119,10 @@ await measureIntensity()   // average/peak live hammers per difficulty band
 ```
 
 Both sample inside `requestAnimationFrame`, so a throttled background tab
-stretches the wall clock rather than corrupting results.
+stretches the wall clock rather than corrupting results. Dodge-timing tests
+poll the hammer's actual telegraph progress instead of `setTimeout`, and
+scoring-rate tests wait out any active slow motion first — otherwise both
+measure wall-clock time against a simulation that isn't running at 1x.
 
 `window.__game` exposes state getters and helpers (`forceWildcard`,
 `setElapsed`, `spawnHammerAt`, ...) used by the suites.

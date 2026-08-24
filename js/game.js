@@ -300,7 +300,30 @@ var shakeMag, shakeTime, shakeDur, flashRed, edgeFlash, dimAmount;
 var stats, firstPlayHintTimer;
 var gameOverT, gameOverPhase, countUp, initials, initialSlot, myRank;
 var firstSession = false;   /* set at boot — drives the one-time controls hint */
-var tutorialStep, tutorialT;
+
+/* ---- slow motion ----
+   Dramatic beats (getting bonked, a wildcard announcement) drop the simulation
+   to a fraction of real speed and ease back. The UI clock and the banners stay
+   on real time so an announcement never outstays its welcome. */
+var timeScale = 1;
+var slowT = 0, slowDur = 0, slowMin = 1;
+
+function slowMo(min, dur) {
+  var remaining = slowDur - slowT;
+  if (min <= slowMin || remaining <= 0) {
+    slowMin = min; slowT = 0; slowDur = dur;
+    timeScale = min;          /* bite on the trigger frame, not the next one */
+  }
+}
+function updateSlowMo(dt) {
+  if (slowT >= slowDur) { timeScale = 1; slowMin = 1; return; }
+  slowT += dt;
+  var k = clamp(slowT / slowDur, 0, 1);
+  /* hold the slowdown, then ease back up to full speed */
+  timeScale = k < 0.32 ? slowMin : lerp(slowMin, 1, easeOutCubic((k - 0.32) / 0.68));
+}
+var tutorialStep, tutorialT, tutorialReturn;
+var menuIndex = 0;          /* 0 = start, 1 = how to play */
 var confetti;
 
 function buildGrid() {
@@ -343,6 +366,8 @@ function resetRun() {
   wild = null; decoy = null; pickup = null;
   frenzy = 0; golden = 0; quake = 0;
   shakeMag = 0; shakeTime = 0; shakeDur = 1;
+  timeScale = 1; slowT = 0; slowDur = 0; slowMin = 1;
+  clearHeld();
   flashRed = 0; edgeFlash = 0; dimAmount = 0;
   stats = { strikes: 0, dodged: 0, closeCalls: 0, longestCombo: 0, hits: 0 };
   firstPlayHintTimer = firstSession ? 9 : 0;
@@ -451,10 +476,6 @@ function updateEffects(dt) {
     p.y += p.vy * dt;
     p.vy *= (1 - 1.2 * dt);
   }
-  for (i = banners.length - 1; i >= 0; i--) {
-    banners[i].life += dt;
-    if (banners[i].life >= banners[i].max) banners.splice(i, 1);
-  }
   for (i = confetti.length - 1; i >= 0; i--) {
     p = confetti[i];
     p.x += p.vx * dt; p.y += p.vy * dt;
@@ -464,6 +485,14 @@ function updateEffects(dt) {
   if (shakeTime < shakeDur) shakeTime += dt;
   if (flashRed > 0) flashRed = Math.max(0, flashRed - dt * 2.2);
   if (edgeFlash > 0) edgeFlash = Math.max(0, edgeFlash - dt * 3.4);
+}
+
+/* Banners run on the real clock so slow motion doesn't stretch them out. */
+function updateBanners(dt) {
+  for (var i = banners.length - 1; i >= 0; i--) {
+    banners[i].life += dt;
+    if (banners[i].life >= banners[i].max) banners.splice(i, 1);
+  }
 }
 
 function shakeOffset() {
@@ -530,17 +559,19 @@ function addScore(n) {
    9. Mole actions
    ------------------------------------------------------------ */
 
+/* Returns true if the mole actually moved. A false return with the cooldown
+   still running is what the input buffer re-tries. */
 function tryMove(dx, dy) {
   var m = mole;
-  if (m.stun > 0 || m.state === 'burrowing' || m.moveCd > 0) return;
+  if (m.stun > 0 || m.state === 'burrowing' || m.moveCd > 0) return false;
   var nc = m.col + dx, nr = m.row + dy;
-  if (nc < 0 || nc >= COLS || nr < 0 || nr >= ROWS) return;  /* no wraparound */
+  if (nc < 0 || nc >= COLS || nr < 0 || nr >= ROWS) return false;  /* no wraparound */
   var to = idx(nc, nr);
   if (blocked[to] > 0) {
     Sound.blocked();
     var bp = pos(to);
     dustPuff(bp.x, bp.y - 10, 5, { color: '#c98b3a', size: 0.7 });
-    return;
+    return false;
   }
   var from = moleCell();
   var fp = pos(from), tp = pos(to);
@@ -560,6 +591,36 @@ function tryMove(dx, dy) {
     Sound.dig(true);
     dustPuff(tp.x, tp.y + 4, 3, { size: 0.55 });
   }
+  return true;
+}
+
+/* ---- input buffering ----
+   A press that lands during the move cooldown is remembered and replayed the
+   instant the cooldown clears, and a held direction keeps stepping. Without
+   this the cooldown reads as dropped inputs rather than as pacing. */
+var heldDirs = [];          /* direction key codes, most recent last */
+var bufDir = null, bufTime = 0;
+var MOVE_BUFFER = 0.22;
+
+function requestMove(d) {
+  if (!tryMove(d[0], d[1])) { bufDir = d; bufTime = MOVE_BUFFER; }
+  else { bufDir = null; bufTime = 0; }
+}
+
+function heldDir() {
+  for (var i = heldDirs.length - 1; i >= 0; i--) {
+    var d = DIRS[heldDirs[i]];
+    if (d) return d;
+  }
+  return null;
+}
+
+function consumeMoveInput(dt) {
+  if (bufTime > 0) bufTime -= dt;
+  if (mole.moveCd > 0 || mole.stun > 0 || mole.state === 'burrowing') return;
+  var d = (bufTime > 0 && bufDir) ? bufDir : heldDir();
+  if (!d) return;
+  if (tryMove(d[0], d[1])) { bufDir = null; bufTime = 0; }
 }
 
 function tryBurrowToggle() {
@@ -609,6 +670,7 @@ function hitMole() {
   comboTier = 0; comboTimer = 0;
   flashRed = 0.5;
   shake(6, 0.22);
+  slowMo(0.22, 0.75);            /* let the bonk land */
   Sound.bonk();
   starBurst(p.x, p.y - 70, 14, '#ffe066');
   dustPuff(p.x, p.y, 16, { size: 1.2, spread: 1.2 });
@@ -935,6 +997,7 @@ function startWildcard() {
   var def = pickWildcard();
   wild = { id: def.id, def: def, t: 0, dur: def.dur };
   banner(def.name, def.blurb, def.color);
+  slowMo(0.3, 1.5);              /* the arena crawls while the announcement reads */
   Sound.chime(def.id);
   var i, p;
 
@@ -1079,6 +1142,7 @@ var aiTimer = 0;
 
 function goTitle() {
   state = S.TITLE;
+  menuIndex = 0;
   autopilot = true;
   resetRun();
   elapsed = 8;               /* attract mode runs at a lively-but-fair pace */
@@ -1094,12 +1158,21 @@ function startGame() {
   Sound.startMusic();
 }
 
-function startTutorial() {
+function startTutorial(returnTo) {
   autopilot = false;
   resetRun();
   state = S.TUTORIAL;
   tutorialStep = 0;
   tutorialT = 0;
+  tutorialReturn = returnTo || 'game';
+}
+
+/* Where the tutorial hands off to: straight into a run on first play, back to
+   the menu when it was opened from "How to play". */
+function finishTutorial() {
+  Store.setTutorialSeen();
+  if (tutorialReturn === 'title') goTitle();
+  else startGame();
 }
 
 function triggerGameOver() {
@@ -1122,6 +1195,7 @@ function triggerGameOver() {
   dustPuff(p.x, p.y, 26, { size: 1.5, spread: 1.4 });
   starBurst(p.x, p.y - 40, 10, '#ffe066');
   shake(7, 0.35);
+  slowMo(0.18, 1.1);
   if (Store.qualifies(score) && score > highScore) { newHigh = true; }
   if (newHigh) { popConfetti(150); Sound.fanfare(); }
 }
@@ -1191,6 +1265,7 @@ function simulate(dt) {
     elapsed += dt;
   }
 
+  if (!autopilot) consumeMoveInput(dt);
   updateMole(dt);
   updateHammers(dt);
 
@@ -1218,12 +1293,13 @@ function simulate(dt) {
       nextMilestone += MILESTONE;
       addScore(50);
       banner('+50 SURVIVAL BONUS', Math.round(elapsed) + ' SECONDS ALIVE', '#7ed957');
+      slowMo(0.45, 0.9);
       Sound.milestone();
     }
     if (firstPlayHintTimer > 0) firstPlayHintTimer -= dt;
   }
 
-  Sound.setTempo(128 + d.phaseIndex * 13 + (frenzy > 0 ? 22 : 0));
+  Sound.setTempo((128 + d.phaseIndex * 13 + (frenzy > 0 ? 22 : 0)) * (0.5 + 0.5 * timeScale));
   updateEffects(dt);
   displayScore += (score - displayScore) * Math.min(1, dt * 9);
   if (Math.abs(score - displayScore) < 0.5) displayScore = score;
@@ -1231,8 +1307,10 @@ function simulate(dt) {
 
 function update(dt) {
   T += dt;
+  updateBanners(dt);
   if (state === S.PLAYING || state === S.TITLE) {
-    simulate(dt);
+    updateSlowMo(dt);
+    simulate(dt * timeScale);
   } else if (state === S.TUTORIAL) {
     tutorialT += dt;
     updateEffects(dt);
@@ -1310,9 +1388,16 @@ function onKeyDown(e) {
   }
 
   if (state === S.TITLE) {
+    if (code === 'ArrowUp' || code === 'KeyW' || code === 'ArrowDown' || code === 'KeyS') {
+      menuIndex = 1 - menuIndex;
+      Sound.select();
+      return;
+    }
+    if (code === 'KeyH') { startTutorial('title'); return; }
     if (code === 'Space' || code === 'Enter') {
-      if (Store.tutorialSeen()) startGame();
-      else startTutorial();
+      if (menuIndex === 1) startTutorial('title');
+      else if (Store.tutorialSeen()) startGame();
+      else startTutorial('game');
     }
     return;
   }
@@ -1320,24 +1405,24 @@ function onKeyDown(e) {
   if (state === S.TUTORIAL) {
     if (tutorialStep === 0) {
       if (DIRS[code]) { tutorialStep = 1; tutorialT = 0; Sound.pop(1.1); return; }
-      if (code === 'Space') { Store.setTutorialSeen(); startGame(); return; }   /* skip */
+      if (code === 'Space') { finishTutorial(); return; }                        /* skip */
     } else if (tutorialStep === 1) {
       if (code === 'Space') { tutorialStep = 2; tutorialT = 0; Sound.dig(true); return; }
     } else {
-      if (code === 'Space' || code === 'Enter') {
-        Store.setTutorialSeen();
-        startGame();
-        return;
-      }
+      if (code === 'Space' || code === 'Enter') { finishTutorial(); return; }
     }
-    if (code === 'Escape') { Store.setTutorialSeen(); startGame(); }
+    if (code === 'Escape') { Store.setTutorialSeen(); goTitle(); }
     return;
   }
 
   if (state === S.PLAYING) {
-    if (code === 'Escape') { state = S.PAUSED; Sound.stopMusic(0.2); return; }
+    if (code === 'Escape') { state = S.PAUSED; clearHeld(); Sound.stopMusic(0.2); return; }
     var d = DIRS[code];
-    if (d) { tryMove(d[0], d[1]); return; }
+    if (d) {
+      if (heldDirs.indexOf(code) < 0) heldDirs.push(code);
+      requestMove(d);
+      return;
+    }
     if (code === 'Space') { tryBurrowToggle(); return; }
     return;
   }
@@ -1376,12 +1461,21 @@ function onKeyDown(e) {
   }
 }
 
+function onKeyUp(e) {
+  var code = keyName(e);
+  var i = heldDirs.indexOf(code);
+  if (i >= 0) heldDirs.splice(i, 1);
+}
+function clearHeld() { heldDirs.length = 0; bufDir = null; bufTime = 0; }
+
 window.addEventListener('keydown', onKeyDown, { passive: false });
+window.addEventListener('keyup', onKeyUp);
+window.addEventListener('blur', clearHeld);
 
 /* Clicking/tapping the canvas also unlocks audio and acts as "start". */
 canvas.addEventListener('pointerdown', function () {
   Sound.unlock();
-  if (state === S.TITLE) { Store.tutorialSeen() ? startGame() : startTutorial(); }
+  if (state === S.TITLE) { Store.tutorialSeen() ? startGame() : startTutorial('game'); }
   else if (state === S.PAUSED) { state = S.PLAYING; Sound.startMusic(); }
 });
 
@@ -2163,15 +2257,17 @@ function drawBanners() {
     var k = b.life / b.max;
     var slide = k < 0.16 ? easeOutBack(k / 0.16) : 1;
     var alpha = k > 0.75 ? 1 - (k - 0.75) / 0.25 : 1;
-    var y = 250;
+    /* Parked in the gap between the HUD bar and the top row of holes so an
+       announcement never covers a hole the player has to read. */
+    var y = 172;
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.translate(VW / 2, y);
     ctx.scale(slide, slide);
-    var w = Math.max(460, measure(b.title, 44) + 120);
-    panel(-w / 2, -54, w, 108, 20, 'rgba(18,10,4,0.82)', b.color, 5);
-    text(b.title, 0, -16, 40, b.color, { outline: 6 });
-    text(b.blurb, 0, 26, 21, '#fff3dd', { outline: 4 });
+    var w = Math.max(430, measure(b.title, 34) + 110);
+    panel(-w / 2, -44, w, 88, 18, 'rgba(18,10,4,0.86)', b.color, 5);
+    text(b.title, 0, -13, 33, b.color, { outline: 5 });
+    text(b.blurb, 0, 21, 19, '#fff3dd', { outline: 4 });
     ctx.restore();
   }
 }
@@ -2204,6 +2300,17 @@ function drawScreenFx() {
     gg.addColorStop(0, 'rgba(255,210,63,0)');
     gg.addColorStop(1, 'rgba(255,210,63,1)');
     ctx.fillStyle = gg;
+    ctx.fillRect(0, 0, VW, VH);
+    ctx.restore();
+  }
+  if (timeScale < 0.98) {
+    var sm = (1 - timeScale) / (1 - Math.min(0.95, slowMin) + 0.0001);
+    ctx.save();
+    ctx.globalAlpha = clamp(sm, 0, 1) * 0.5;
+    var smg = ctx.createRadialGradient(VW / 2, VH / 2, 240, VW / 2, VH / 2, 820);
+    smg.addColorStop(0, 'rgba(10,16,40,0)');
+    smg.addColorStop(1, 'rgba(10,16,40,0.95)');
+    ctx.fillStyle = smg;
     ctx.fillRect(0, 0, VW, VH);
     ctx.restore();
   }
@@ -2307,25 +2414,39 @@ function drawTitleScreen() {
   }
 
   ctx.save();
-  var sg = ctx.createLinearGradient(0, VH - 210, 0, VH);
+  var sg = ctx.createLinearGradient(0, VH - 290, 0, VH);
   sg.addColorStop(0, 'rgba(8,14,6,0)');
   sg.addColorStop(0.45, 'rgba(8,14,6,0.42)');
   sg.addColorStop(1, 'rgba(8,14,6,0.6)');
   ctx.fillStyle = sg;
-  ctx.fillRect(0, VH - 210, VW, 210);
+  ctx.fillRect(0, VH - 290, VW, 290);
   ctx.restore();
 
+  var items = ['START GAME', 'HOW TO PLAY'];
   var pulse = 0.62 + 0.38 * Math.sin(T * 4.2);
-  ctx.save();
-  ctx.globalAlpha = pulse;
-  text('PRESS  SPACE  TO START', VW / 2, VH - 120, 42, '#ffffff', { outline: 8 });
-  ctx.restore();
+  for (var i = 0; i < items.length; i++) {
+    var iy = VH - 200 + i * 62;
+    var sel = (i === menuIndex);
+    var size = sel ? 40 : 31;
+    ctx.save();
+    ctx.globalAlpha = sel ? pulse : 0.62;
+    if (sel) {
+      var wgt = measure(items[i], size) + 96;
+      panel(VW / 2 - wgt / 2, iy - 27, wgt, 54, 14,
+            'rgba(255,210,63,0.13)', 'rgba(255,210,63,0.75)', 3);
+      text('\u25B6', VW / 2 - wgt / 2 + 28, iy, 20, '#ffd23f', { outline: 3 });
+    }
+    text(items[i], VW / 2, iy, size, sel ? '#ffffff' : '#e9f7d8', { outline: sel ? 7 : 5 });
+    ctx.restore();
+  }
 
-  text('ARROWS / WASD move    SPACE burrow    ESC pause    M mute',
-       VW / 2, VH - 58, 21, '#e9f7d8', { outline: 4 });
+  ctx.save();
+  ctx.globalAlpha = 0.82;
+  text('\u2191\u2193 choose     SPACE select', VW / 2, VH - 62, 19, '#cfe6c0', { outline: 3 });
+  ctx.restore();
   ctx.save();
   ctx.globalAlpha = 0.75;
-  text(Sound.isMuted() ? 'SOUND: OFF' : 'SOUND: ON', VW - 36, VH - 26, 16, '#cfe6c0',
+  text(Sound.isMuted() ? 'SOUND: OFF' : 'SOUND: ON', VW - 36, VH - 18, 15, '#cfe6c0',
        { align: 'right', outline: 3 });
   ctx.restore();
 }
@@ -2632,6 +2753,11 @@ window.__game = {
   get decoy() { return decoy; },
   get pickup() { return pickup; },
   get comboTier() { return comboTier; },
+  get timeScale() { return timeScale; },
+  get menuIndex() { return menuIndex; },
+  get heldDirs() { return heldDirs.slice(); },
+  get autopilot() { return autopilot; },
+  slowMo: function (m, d) { slowMo(m, d); },
   moleCell: function () { return moleCell(); },
   difficulty: function () { return difficulty(); },
   setMole: function (c, r, st) {
