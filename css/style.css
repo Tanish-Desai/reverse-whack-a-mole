@@ -29,6 +29,10 @@ body {
 
 canvas#game {
   display: block;
+  /* the canvas is an integer multiple of the design resolution; keep
+     the browser's scale-to-fit nearest-neighbour so pixels stay hard */
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
   border-radius: 10px;
   background: #6fbf4a;
   outline: none;

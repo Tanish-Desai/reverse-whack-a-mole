@@ -22,7 +22,7 @@ var SCALE = 3;
 var VW = 1280, VH = 720;
 
 function parseArgs(argv) {
-  var a = { scale: SCALE, out: path.join(__dirname, '../../build/pixel') };
+  var a = { scale: SCALE, out: path.join(__dirname, '../../assets/sprites') };
   for (var i = 2; i < argv.length; i++) {
     if (argv[i] === '--scale') a.scale = Number(argv[++i]);
     else if (argv[i] === '--out') a.out = path.resolve(argv[++i]);
@@ -102,7 +102,7 @@ function staticAssets(scale) {
     { name: 'hole',          buf: HOLES.drawHole(),        ax: HOLES.CX,  ay: HOLES.CY },
     { name: 'hole-front',    buf: HOLES.drawHoleFront(),   ax: HOLES.CX,  ay: HOLES.CY },
     { name: 'hole-boarded',  buf: HOLES.drawHoleBoarded(), ax: HOLES.CX,  ay: HOLES.CY },
-    { name: 'hammer',        buf: HAMMER.drawHammer(),     ax: HAMMER.CX, ay: HAMMER.H },
+    { name: 'hammer',        buf: HAMMER.drawHammer(),     ax: HAMMER.CX, ay: HAMMER.HEAD_Y },
     { name: 'grass',         buf: GRASS.drawGrass(Math.ceil(VW / scale), Math.ceil(VH / scale)), ax: 0, ay: 0 }
   ];
 }

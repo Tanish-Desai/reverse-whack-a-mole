@@ -1,0 +1,722 @@
+{
+  "image": "mole-sheet.png",
+  "size": {
+    "w": 1024,
+    "h": 2048
+  },
+  "scale": 3,
+  "padding": 2,
+  "holeMouth": {
+    "rx": 66,
+    "ry": 27
+  },
+  "frames": {
+    "decoy.pop.02": {
+      "x": 2,
+      "y": 2,
+      "w": 99,
+      "h": 150,
+      "offsetX": -48,
+      "offsetY": -119
+    },
+    "decoy.pop.05": {
+      "x": 103,
+      "y": 2,
+      "w": 99,
+      "h": 150,
+      "offsetX": -48,
+      "offsetY": -133
+    },
+    "decoy.pop.03": {
+      "x": 204,
+      "y": 2,
+      "w": 93,
+      "h": 150,
+      "offsetX": -45,
+      "offsetY": -132
+    },
+    "decoy.pop.04": {
+      "x": 299,
+      "y": 2,
+      "w": 93,
+      "h": 150,
+      "offsetX": -45,
+      "offsetY": -135
+    },
+    "decoy.pop.01": {
+      "x": 394,
+      "y": 2,
+      "w": 105,
+      "h": 138,
+      "offsetX": -51,
+      "offsetY": -87
+    },
+    "decoy.pop.06": {
+      "x": 501,
+      "y": 2,
+      "w": 105,
+      "h": 138,
+      "offsetX": -51,
+      "offsetY": -122
+    },
+    "base.dazed.01": {
+      "x": 608,
+      "y": 2,
+      "w": 117,
+      "h": 129,
+      "offsetX": -57,
+      "offsetY": -117
+    },
+    "base.dazed.02": {
+      "x": 727,
+      "y": 2,
+      "w": 117,
+      "h": 129,
+      "offsetX": -57,
+      "offsetY": -117
+    },
+    "decoy.dazed.01": {
+      "x": 846,
+      "y": 2,
+      "w": 117,
+      "h": 129,
+      "offsetX": -57,
+      "offsetY": -117
+    },
+    "decoy.dazed.02": {
+      "x": 2,
+      "y": 154,
+      "w": 117,
+      "h": 129,
+      "offsetX": -57,
+      "offsetY": -117
+    },
+    "gold.dazed.01": {
+      "x": 121,
+      "y": 154,
+      "w": 117,
+      "h": 129,
+      "offsetX": -57,
+      "offsetY": -117
+    },
+    "gold.dazed.02": {
+      "x": 240,
+      "y": 154,
+      "w": 117,
+      "h": 129,
+      "offsetX": -57,
+      "offsetY": -117
+    },
+    "base.pop.02": {
+      "x": 359,
+      "y": 154,
+      "w": 99,
+      "h": 129,
+      "offsetX": -48,
+      "offsetY": -98
+    },
+    "base.pop.05": {
+      "x": 460,
+      "y": 154,
+      "w": 99,
+      "h": 129,
+      "offsetX": -48,
+      "offsetY": -112
+    },
+    "gold.pop.02": {
+      "x": 561,
+      "y": 154,
+      "w": 99,
+      "h": 129,
+      "offsetX": -48,
+      "offsetY": -98
+    },
+    "gold.pop.05": {
+      "x": 662,
+      "y": 154,
+      "w": 99,
+      "h": 129,
+      "offsetX": -48,
+      "offsetY": -112
+    },
+    "base.pop.03": {
+      "x": 763,
+      "y": 154,
+      "w": 93,
+      "h": 129,
+      "offsetX": -45,
+      "offsetY": -111
+    },
+    "base.pop.04": {
+      "x": 858,
+      "y": 154,
+      "w": 93,
+      "h": 129,
+      "offsetX": -45,
+      "offsetY": -114
+    },
+    "gold.pop.03": {
+      "x": 2,
+      "y": 285,
+      "w": 93,
+      "h": 129,
+      "offsetX": -45,
+      "offsetY": -111
+    },
+    "gold.pop.04": {
+      "x": 97,
+      "y": 285,
+      "w": 93,
+      "h": 129,
+      "offsetX": -45,
+      "offsetY": -114
+    },
+    "base.dazed.00": {
+      "x": 192,
+      "y": 285,
+      "w": 117,
+      "h": 126,
+      "offsetX": -57,
+      "offsetY": -114
+    },
+    "base.dazed.03": {
+      "x": 311,
+      "y": 285,
+      "w": 117,
+      "h": 126,
+      "offsetX": -57,
+      "offsetY": -114
+    },
+    "base.dazed.04": {
+      "x": 430,
+      "y": 285,
+      "w": 117,
+      "h": 126,
+      "offsetX": -57,
+      "offsetY": -114
+    },
+    "base.dazed.05": {
+      "x": 549,
+      "y": 285,
+      "w": 117,
+      "h": 126,
+      "offsetX": -57,
+      "offsetY": -114
+    },
+    "decoy.burrow.00": {
+      "x": 668,
+      "y": 285,
+      "w": 117,
+      "h": 126,
+      "offsetX": -57,
+      "offsetY": -114
+    },
+    "decoy.burrow.01": {
+      "x": 787,
+      "y": 285,
+      "w": 117,
+      "h": 126,
+      "offsetX": -57,
+      "offsetY": -113
+    },
+    "decoy.burrow.02": {
+      "x": 2,
+      "y": 416,
+      "w": 117,
+      "h": 126,
+      "offsetX": -57,
+      "offsetY": -109
+    },
+    "decoy.dazed.00": {
+      "x": 121,
+      "y": 416,
+      "w": 117,
+      "h": 126,
+      "offsetX": -57,
+      "offsetY": -114
+    },
+    "decoy.dazed.03": {
+      "x": 240,
+      "y": 416,
+      "w": 117,
+      "h": 126,
+      "offsetX": -57,
+      "offsetY": -114
+    },
+    "decoy.dazed.04": {
+      "x": 359,
+      "y": 416,
+      "w": 117,
+      "h": 126,
+      "offsetX": -57,
+      "offsetY": -114
+    },
+    "decoy.dazed.05": {
+      "x": 478,
+      "y": 416,
+      "w": 117,
+      "h": 126,
+      "offsetX": -57,
+      "offsetY": -114
+    },
+    "decoy.idle.00": {
+      "x": 597,
+      "y": 416,
+      "w": 117,
+      "h": 126,
+      "offsetX": -57,
+      "offsetY": -114
+    },
+    "decoy.idle.01": {
+      "x": 716,
+      "y": 416,
+      "w": 117,
+      "h": 126,
+      "offsetX": -57,
+      "offsetY": -117
+    },
+    "decoy.idle.02": {
+      "x": 835,
+      "y": 416,
+      "w": 117,
+      "h": 126,
+      "offsetX": -57,
+      "offsetY": -114
+    },
+    "decoy.idle.03": {
+      "x": 2,
+      "y": 544,
+      "w": 117,
+      "h": 126,
+      "offsetX": -57,
+      "offsetY": -111
+    },
+    "decoy.pop.00": {
+      "x": 121,
+      "y": 544,
+      "w": 117,
+      "h": 126,
+      "offsetX": -57,
+      "offsetY": -38
+    },
+    "decoy.pop.07": {
+      "x": 240,
+      "y": 544,
+      "w": 117,
+      "h": 126,
+      "offsetX": -57,
+      "offsetY": -114
+    },
+    "gold.dazed.00": {
+      "x": 359,
+      "y": 544,
+      "w": 117,
+      "h": 126,
+      "offsetX": -57,
+      "offsetY": -114
+    },
+    "gold.dazed.03": {
+      "x": 478,
+      "y": 544,
+      "w": 117,
+      "h": 126,
+      "offsetX": -57,
+      "offsetY": -114
+    },
+    "gold.dazed.04": {
+      "x": 597,
+      "y": 544,
+      "w": 117,
+      "h": 126,
+      "offsetX": -57,
+      "offsetY": -114
+    },
+    "gold.dazed.05": {
+      "x": 716,
+      "y": 544,
+      "w": 117,
+      "h": 126,
+      "offsetX": -57,
+      "offsetY": -114
+    },
+    "decoy.burrow.03": {
+      "x": 835,
+      "y": 544,
+      "w": 123,
+      "h": 120,
+      "offsetX": -60,
+      "offsetY": -95
+    },
+    "base.pop.01": {
+      "x": 2,
+      "y": 672,
+      "w": 105,
+      "h": 120,
+      "offsetX": -51,
+      "offsetY": -69
+    },
+    "base.pop.06": {
+      "x": 109,
+      "y": 672,
+      "w": 105,
+      "h": 120,
+      "offsetX": -51,
+      "offsetY": -104
+    },
+    "gold.pop.01": {
+      "x": 216,
+      "y": 672,
+      "w": 105,
+      "h": 120,
+      "offsetX": -51,
+      "offsetY": -69
+    },
+    "gold.pop.06": {
+      "x": 323,
+      "y": 672,
+      "w": 105,
+      "h": 120,
+      "offsetX": -51,
+      "offsetY": -104
+    },
+    "decoy.burrow.04": {
+      "x": 430,
+      "y": 672,
+      "w": 129,
+      "h": 114,
+      "offsetX": -63,
+      "offsetY": -69
+    },
+    "base.burrow.00": {
+      "x": 561,
+      "y": 672,
+      "w": 117,
+      "h": 108,
+      "offsetX": -57,
+      "offsetY": -96
+    },
+    "base.burrow.01": {
+      "x": 680,
+      "y": 672,
+      "w": 117,
+      "h": 108,
+      "offsetX": -57,
+      "offsetY": -95
+    },
+    "base.burrow.02": {
+      "x": 799,
+      "y": 672,
+      "w": 117,
+      "h": 108,
+      "offsetX": -57,
+      "offsetY": -91
+    },
+    "base.idle.00": {
+      "x": 2,
+      "y": 794,
+      "w": 117,
+      "h": 108,
+      "offsetX": -57,
+      "offsetY": -96
+    },
+    "base.idle.01": {
+      "x": 121,
+      "y": 794,
+      "w": 117,
+      "h": 108,
+      "offsetX": -57,
+      "offsetY": -99
+    },
+    "base.idle.02": {
+      "x": 240,
+      "y": 794,
+      "w": 117,
+      "h": 108,
+      "offsetX": -57,
+      "offsetY": -96
+    },
+    "base.idle.03": {
+      "x": 359,
+      "y": 794,
+      "w": 117,
+      "h": 108,
+      "offsetX": -57,
+      "offsetY": -93
+    },
+    "base.pop.00": {
+      "x": 478,
+      "y": 794,
+      "w": 117,
+      "h": 108,
+      "offsetX": -57,
+      "offsetY": -20
+    },
+    "base.pop.07": {
+      "x": 597,
+      "y": 794,
+      "w": 117,
+      "h": 108,
+      "offsetX": -57,
+      "offsetY": -96
+    },
+    "gold.burrow.00": {
+      "x": 716,
+      "y": 794,
+      "w": 117,
+      "h": 108,
+      "offsetX": -57,
+      "offsetY": -96
+    },
+    "gold.burrow.01": {
+      "x": 835,
+      "y": 794,
+      "w": 117,
+      "h": 108,
+      "offsetX": -57,
+      "offsetY": -95
+    },
+    "gold.burrow.02": {
+      "x": 2,
+      "y": 904,
+      "w": 117,
+      "h": 108,
+      "offsetX": -57,
+      "offsetY": -91
+    },
+    "gold.idle.00": {
+      "x": 121,
+      "y": 904,
+      "w": 117,
+      "h": 108,
+      "offsetX": -57,
+      "offsetY": -96
+    },
+    "gold.idle.01": {
+      "x": 240,
+      "y": 904,
+      "w": 117,
+      "h": 108,
+      "offsetX": -57,
+      "offsetY": -99
+    },
+    "gold.idle.02": {
+      "x": 359,
+      "y": 904,
+      "w": 117,
+      "h": 108,
+      "offsetX": -57,
+      "offsetY": -96
+    },
+    "gold.idle.03": {
+      "x": 478,
+      "y": 904,
+      "w": 117,
+      "h": 108,
+      "offsetX": -57,
+      "offsetY": -93
+    },
+    "gold.pop.00": {
+      "x": 597,
+      "y": 904,
+      "w": 117,
+      "h": 108,
+      "offsetX": -57,
+      "offsetY": -20
+    },
+    "gold.pop.07": {
+      "x": 716,
+      "y": 904,
+      "w": 117,
+      "h": 108,
+      "offsetX": -57,
+      "offsetY": -96
+    },
+    "decoy.burrow.05": {
+      "x": 835,
+      "y": 904,
+      "w": 135,
+      "h": 105,
+      "offsetX": -66,
+      "offsetY": -26
+    },
+    "base.burrow.03": {
+      "x": 2,
+      "y": 1014,
+      "w": 123,
+      "h": 102,
+      "offsetX": -60,
+      "offsetY": -77
+    },
+    "gold.burrow.03": {
+      "x": 127,
+      "y": 1014,
+      "w": 123,
+      "h": 102,
+      "offsetX": -60,
+      "offsetY": -77
+    },
+    "base.burrow.04": {
+      "x": 252,
+      "y": 1014,
+      "w": 129,
+      "h": 96,
+      "offsetX": -63,
+      "offsetY": -51
+    },
+    "gold.burrow.04": {
+      "x": 383,
+      "y": 1014,
+      "w": 129,
+      "h": 96,
+      "offsetX": -63,
+      "offsetY": -51
+    },
+    "base.burrow.05": {
+      "x": 514,
+      "y": 1014,
+      "w": 135,
+      "h": 87,
+      "offsetX": -66,
+      "offsetY": -8
+    },
+    "gold.burrow.05": {
+      "x": 651,
+      "y": 1014,
+      "w": 135,
+      "h": 87,
+      "offsetX": -66,
+      "offsetY": -8
+    },
+    "decoy.squished.00": {
+      "x": 788,
+      "y": 1014,
+      "w": 177,
+      "h": 66,
+      "offsetX": -87,
+      "offsetY": -47
+    },
+    "base.squished.00": {
+      "x": 2,
+      "y": 1118,
+      "w": 177,
+      "h": 48,
+      "offsetX": -87,
+      "offsetY": -29
+    },
+    "gold.squished.00": {
+      "x": 181,
+      "y": 1118,
+      "w": 177,
+      "h": 48,
+      "offsetX": -87,
+      "offsetY": -29
+    }
+  },
+  "clips": {
+    "base.idle": [
+      "base.idle.00",
+      "base.idle.01",
+      "base.idle.02",
+      "base.idle.03"
+    ],
+    "base.burrow": [
+      "base.burrow.00",
+      "base.burrow.01",
+      "base.burrow.02",
+      "base.burrow.03",
+      "base.burrow.04",
+      "base.burrow.05"
+    ],
+    "base.pop": [
+      "base.pop.00",
+      "base.pop.01",
+      "base.pop.02",
+      "base.pop.03",
+      "base.pop.04",
+      "base.pop.05",
+      "base.pop.06",
+      "base.pop.07"
+    ],
+    "base.dazed": [
+      "base.dazed.00",
+      "base.dazed.01",
+      "base.dazed.02",
+      "base.dazed.03",
+      "base.dazed.04",
+      "base.dazed.05"
+    ],
+    "base.squished": [
+      "base.squished.00"
+    ],
+    "gold.idle": [
+      "gold.idle.00",
+      "gold.idle.01",
+      "gold.idle.02",
+      "gold.idle.03"
+    ],
+    "gold.burrow": [
+      "gold.burrow.00",
+      "gold.burrow.01",
+      "gold.burrow.02",
+      "gold.burrow.03",
+      "gold.burrow.04",
+      "gold.burrow.05"
+    ],
+    "gold.pop": [
+      "gold.pop.00",
+      "gold.pop.01",
+      "gold.pop.02",
+      "gold.pop.03",
+      "gold.pop.04",
+      "gold.pop.05",
+      "gold.pop.06",
+      "gold.pop.07"
+    ],
+    "gold.dazed": [
+      "gold.dazed.00",
+      "gold.dazed.01",
+      "gold.dazed.02",
+      "gold.dazed.03",
+      "gold.dazed.04",
+      "gold.dazed.05"
+    ],
+    "gold.squished": [
+      "gold.squished.00"
+    ],
+    "decoy.idle": [
+      "decoy.idle.00",
+      "decoy.idle.01",
+      "decoy.idle.02",
+      "decoy.idle.03"
+    ],
+    "decoy.burrow": [
+      "decoy.burrow.00",
+      "decoy.burrow.01",
+      "decoy.burrow.02",
+      "decoy.burrow.03",
+      "decoy.burrow.04",
+      "decoy.burrow.05"
+    ],
+    "decoy.pop": [
+      "decoy.pop.00",
+      "decoy.pop.01",
+      "decoy.pop.02",
+      "decoy.pop.03",
+      "decoy.pop.04",
+      "decoy.pop.05",
+      "decoy.pop.06",
+      "decoy.pop.07"
+    ],
+    "decoy.dazed": [
+      "decoy.dazed.00",
+      "decoy.dazed.01",
+      "decoy.dazed.02",
+      "decoy.dazed.03",
+      "decoy.dazed.04",
+      "decoy.dazed.05"
+    ],
+    "decoy.squished": [
+      "decoy.squished.00"
+    ]
+  }
+}

@@ -83,3 +83,43 @@ rise, so the game draws at `(holeX + offsetX, holeY + offsetY)`.
 
 This step produced the assets. `js/game.js` still draws the old procedural
 art; swapping it over is the next step.
+
+## Wired into the game
+
+`js/sprites.js` loads the set at runtime and provides the draw helpers
+`js/game.js` uses. Loading is asynchronous and **non-blocking**: the game
+boots and plays on its original procedural art, then swaps the moment the
+assets arrive. If they 404 the game still plays, just in the old style —
+every call site falls back.
+
+What the sprites replace:
+
+| Game function | Asset |
+|---|---|
+| `buildBackground()` | `grass.png` |
+| `drawHole()` | `hole.png` |
+| `drawHoleLip()` | `hole-front.png` |
+| `drawBlocked()` | `hole-boarded.png` (hazard glow stays procedural) |
+| `drawHammerShape()` | `hammer.png` |
+| `drawPlayerMole()` / `drawDecoy()` | atlas frames via `moleFrameName()` |
+
+Effects and UI stay procedural on purpose: telegraphs, particles, floaters,
+screen shake, the golden glow, the HUD and all text. Those are motion and
+interface, not scenery, and several of them need alpha blending that a fixed
+palette can't express.
+
+### Integer scaling
+
+`resize()` keeps the canvas backing store an **integer** multiple of the
+1280x720 design resolution and lets CSS scale it the rest of the way, with
+`image-rendering: pixelated`. Before this, the canvas was sized to the window
+(e.g. 1320x742), so art pixels landed on fractional boundaries — some one
+screen pixel wide, their neighbours two. That reads as a wobble across the
+whole picture.
+
+### Dev server
+
+`tools/devserver.py` serves with `Cache-Control: no-store` and strips
+`Last-Modified`/`ETag`. Plain `http.server` lets the browser heuristically
+cache `js/*.js` and serve it **without even asking the server**, which
+silently hides edits.

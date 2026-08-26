@@ -102,7 +102,7 @@ function renderScene(opts) {
   if (opts.hammer !== false) {
     var hc = opts.hammerCell === undefined ? 7 : opts.hammerCell;
     var hp = pos[hc];
-    place(b, HAMMER.drawHammer(), HAMMER.CX, HAMMER.H, hp.x, hp.y - 4);
+    place(b, HAMMER.drawHammer(), HAMMER.CX, HAMMER.HEAD_Y, hp.x, hp.y - 2);
   }
 
   return bufToCanvas(b, SCALE);
