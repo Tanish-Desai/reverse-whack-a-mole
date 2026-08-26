@@ -21,7 +21,8 @@ var MOVE_CD_UNDER = 0.04;
 var BURROW_TIME   = 0.20;                /* invulnerable dive */
 var UNDER_TIME    = 3.0;                 /* surface timer */
 var EJECT_STUN    = 0.40;
-var HIT_STUN      = 0.80;
+var HIT_STUN      = 0.18;                /* input lockout after a bonk  */
+var HIT_DAZE      = 0.80;                /* how long the bonk *looks* on */
 var HIT_INVULN    = 1.5;
 var STRIKE_TIME   = 0.30;                /* hammer danger window */
 var RECOVER_TIME  = 0.25;
@@ -30,7 +31,7 @@ var COMBO_WINDOW  = 3.0;
 var MILESTONE     = 15;                  /* seconds per survival bonus */
 var START_LIVES   = 3, MAX_LIVES = 5;
 
-var FONT = 'Verdana, Geneva, "DejaVu Sans", sans-serif';
+var FONT = '"AGoblinAppears", Verdana, Geneva, "DejaVu Sans", sans-serif';
 
 /* Difficulty anchors — interpolated continuously between rows. */
 var PHASES = [
@@ -45,7 +46,6 @@ var WILDCARDS = [
   { id: 'lockdown',  weight: 25, dur: 5, name: 'GRID LOCKDOWN', blurb: 'Holes boarded up!',        color: '#ff9130', icon: 'lock'  },
   { id: 'extralife', weight: 15, dur: 3, name: 'EXTRA LIFE',    blurb: 'Grab it — above ground!',  color: '#ff5c8a', icon: 'heart' },
   { id: 'frenzy',    weight: 20, dur: 4, name: 'FRENZY MODE',   blurb: 'Triple points. Good luck.',color: '#a45cff', icon: 'bolt' },
-  { id: 'decoy',     weight: 15, dur: 4, name: 'DECOY MOLE',    blurb: 'It draws their aim.',      color: '#2fd4d4', icon: 'decoy' },
   { id: 'golden',    weight: 15, dur: 4, name: 'GOLDEN MOLE',   blurb: '5x points. Untouchable.',  color: '#ffd23f', icon: 'star'  }
 ];
 
@@ -137,12 +137,14 @@ function circle(x, y, r) {
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
 }
-function setFont(size, weight) {
-  ctx.font = (weight || 900) + ' ' + size + 'px ' + FONT;
+function setFont(size) {
+  /* No weight: the pixel face ships a single weight, and asking for 900
+     makes the browser synthesise a bold that smears the pixel grid. */
+  ctx.font = Math.round(size) + 'px ' + FONT;
 }
 function text(str, x, y, size, fill, opts) {
   opts = opts || {};
-  setFont(size, opts.weight);
+  setFont(size);
   ctx.textAlign = opts.align || 'center';
   ctx.textBaseline = opts.baseline || 'middle';
   if (opts.shadow !== false) {
@@ -163,7 +165,7 @@ function text(str, x, y, size, fill, opts) {
   ctx.fillText(str, x, y);
 }
 function measure(str, size, weight) {
-  setFont(size, weight);
+  setFont(size);
   return ctx.measureText(str).width;
 }
 function panel(x, y, w, h, r, fill, stroke, lw) {
@@ -307,7 +309,7 @@ var vulnLeft = [];          /* T at which the mole stopped being vulnerable on a
 var mole, hammers, particles, floaters, banners;
 var lives, score, scoreF, displayScore, highScore, newHigh;
 var comboTier, comboTimer, nextMilestone;
-var spawnTimer, wildTimer, wild, decoy, pickup;
+var spawnTimer, wildTimer, wild, pickup;
 var frenzy, golden;
 var shakeMag, shakeTime, shakeDur, flashRed, edgeFlash, dimAmount;
 var stats, firstPlayHintTimer;
@@ -375,7 +377,7 @@ function resetRun() {
   nextMilestone = MILESTONE;
   spawnTimer = 1.1;
   wildTimer = rnd(12, 20);
-  wild = null; decoy = null; pickup = null;
+  wild = null; pickup = null;
   frenzy = 0; golden = 0;
   shakeMag = 0; shakeTime = 0; shakeDur = 1;
   timeScale = 1; slowT = 0; slowDur = 0; slowMin = 1;
@@ -647,7 +649,7 @@ function hitMole() {
   lives--;
   stats.hits++;
   m.stun = HIT_STUN;
-  m.dazed = HIT_STUN;
+  m.dazed = HIT_DAZE;
   m.invuln = HIT_INVULN;
   m.squished = 0.35;
   comboTier = 0; comboTimer = 0;
@@ -764,7 +766,13 @@ function spawnHammer(cell, warn, delay) {
     resolved: false,
     wobble: rnd(0, Math.PI * 2),
     tilt: (Math.random() < 0.5 ? -1 : 1) * rnd(0.12, 0.3),
-    scale: rnd(0.94, 1.08),
+    /* Fixed at 1: the old random 0.94-1.08 scaled the sprite by a
+       fraction, which breaks the pixel grid the same way a fractional
+       canvas scale does. Variety comes from tilt and timing instead. */
+    scale: 1,
+    /* Faster hammers clear out faster. warn runs 1.0s early game down to
+       0.4s late, and the arena gets crowded exactly when it is short. */
+    fade: clamp(lerp(0.06, 0.20, (warn - 0.4) / 0.6), 0.06, 0.20),
     queued: false
   };
   hammers.push(h);
@@ -780,9 +788,8 @@ function weightedType(w) {
   return 'pattern';
 }
 
-/* The decoy steals half of all player-seeking aim. */
+
 function aimCell() {
-  if (decoy && Math.random() < 0.5) return decoy.cell;
   return moleCell();
 }
 
@@ -1019,14 +1026,6 @@ function startWildcard() {
   } else if (def.id === 'frenzy') {
     frenzy = def.dur;
 
-  } else if (def.id === 'decoy') {
-    var opts = [];
-    for (i = 0; i < NCELLS; i++) if (blocked[i] <= 0 && i !== moleCell()) opts.push(i);
-    if (!opts.length) opts = [moleCell()];
-    decoy = { cell: pick(opts), t: 0, dur: def.dur, bob: 0 };
-    p = pos(decoy.cell);
-    dustPuff(p.x, p.y - 6, 8, { color: '#2fd4d4', size: 0.9 });
-
   } else if (def.id === 'golden') {
     golden = def.dur;
   }
@@ -1052,16 +1051,6 @@ function updateWildcards(dt) {
     golden -= dt;
     p = pos(moleCell());
     if (Math.random() < dt * 34) sparkle(p.x + rnd(-40, 40), p.y - rnd(10, 90), '#ffd23f');
-  }
-
-  if (decoy) {
-    decoy.t += dt;
-    decoy.bob += dt;
-    if (decoy.t >= decoy.dur) {
-      p = pos(decoy.cell);
-      dustPuff(p.x, p.y - 6, 8, { color: '#2fd4d4', size: 0.8 });
-      decoy = null;
-    }
   }
 
   if (pickup) {
@@ -1659,9 +1648,21 @@ function drawHammerShape(alpha, scale) {
 function drawHammer(h) {
   var p = hp(h.cell);
   var raise = hammerRaise(h);
-  var alpha = 1;
-  if (h.phase === 'recover') alpha = 1 - clamp(h.t / RECOVER_TIME, 0, 1) * 0.85;
   if (h.phase === 'delay') return;
+
+  /* The whole of STRIKE_TIME is a live danger window, so the hammer must
+     never vanish while it is still down — a cell that looks clear has to
+     be clear. It drops to half transparency instead, which lets the mole
+     read through the pile-up, then clears out fast once the window has
+     passed. Faster hammers clear faster still. */
+  var alpha = 1;
+  if (h.phase === 'strike') {
+    var settle = clamp((h.t - 0.05) / Math.max(0.01, STRIKE_TIME - 0.05), 0, 1);
+    alpha = 1 - 0.45 * settle;
+  } else if (h.phase === 'recover') {
+    alpha = 0.55 * (1 - clamp(h.t / h.fade, 0, 1));
+  }
+  if (alpha <= 0.01) return;
 
   var tilt;
   if (h.phase === 'warn') {
@@ -1699,11 +1700,11 @@ function drawHammer(h) {
   }
 
   ctx.save();
-  ctx.translate(p.x, p.y - 44 - raise);
+  /* The impact recoil used to be a fractional ctx.scale, which smeared
+     the pixel grid. A whole-pixel bounce reads the same and stays sharp. */
+  var recoil = h.phase === 'strike' ? Math.round(6 * Math.exp(-h.t * 24)) : 0;
+  ctx.translate(p.x, p.y - 44 - raise + recoil);
   ctx.rotate(tilt);
-  var sq = 1;
-  if (h.phase === 'strike') sq = 1 + 0.10 * Math.exp(-h.t * 24);
-  ctx.scale(sq, 1 / sq);
   drawHammerShape(alpha, h.scale);
   ctx.restore();
   ctx.globalAlpha = 1;
@@ -1738,6 +1739,32 @@ function moleFrameName(m, variant) {
   return Sprites.loopFrame(Sprites.clipOf(variant, 'idle'), m.bob * 0.55);
 }
 
+/* Discrete opacity steps rather than a smooth fade — a stepped flicker
+   is what reads as invulnerability in this era of game. */
+/* The floor is deliberately well above zero. A classic flicker dips to
+   nothing, but the mole is the thing the player is tracking, and the bonk
+   already buries it under a dust puff and a hammer. */
+var BLINK_LEVELS = [1, 0.42, 0.85, 0.6];
+var BLINK_HZ = 14;
+
+function invulnAlpha(m) {
+  if (m.invuln <= 0) return 1;
+  return BLINK_LEVELS[Math.floor(T * BLINK_HZ) % BLINK_LEVELS.length];
+}
+
+/* A tight buzz on the mole itself while it is seeing stars. The screen
+   shake is per-frame noise, so this is deliberately periodic and much
+   faster — the two must not read as the same motion. */
+function dazeJitter(m) {
+  if (m.dazed <= 0) return { x: 0, y: 0 };
+  var k = clamp(m.dazed / HIT_DAZE, 0, 1);
+  var amp = 3 * k;
+  return {
+    x: Math.round(Math.sin(T * 57) * amp),
+    y: Math.round(Math.cos(T * 43) * amp * 0.6)
+  };
+}
+
 function goldenGlow(p) {
   if (golden <= 0) return;
   ctx.save();
@@ -1751,14 +1778,13 @@ function drawPlayerMoleSprite(m, p) {
   var name = moleFrameName(m, golden > 0 ? 'gold' : 'base');
   if (!name) return false;
   var squished = m.squished > 0 && state === S.GAME_OVER;
+  var j = dazeJitter(m);
   ctx.save();
-  if (m.invuln > 0 && m.stun <= 0) {
-    ctx.globalAlpha = 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(T * 26));
-  }
+  ctx.globalAlpha = invulnAlpha(m);
   /* The game-over pancake lies flat across the mouth, so it is the one
      pose that must not be clipped by the rim. */
   if (!squished) Sprites.clipHoleMouth(ctx, p.x, p.y);
-  var ok = Sprites.drawMoleFrame(ctx, name, p.x, p.y);
+  var ok = Sprites.drawMoleFrame(ctx, name, p.x + j.x, p.y + j.y);
   ctx.restore();
   return ok;
 }
@@ -1786,8 +1812,7 @@ function drawPlayerMole() {
   var bob = m.state === 'above' && m.stun <= 0 ? Math.sin(m.bob * 4.5) * 0.02 : 0;
   sy += bob; sx -= bob * 0.5;
 
-  var alpha = 1;
-  if (m.invuln > 0 && m.stun <= 0) alpha = 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(T * 26));
+  var alpha = invulnAlpha(m);
 
   if (m.squished > 0 && state === S.GAME_OVER) { sx = 1.75; sy = 0.3; rise = 0.55; }
 
@@ -1847,36 +1872,6 @@ function drawUndergroundTimer() {
   ctx.ellipse(p.x, p.y, rx, ry, 0, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * frac);
   ctx.stroke();
   ctx.restore();
-}
-
-function drawDecoy() {
-  if (!decoy) return;
-  var p = hp(decoy.cell);
-  var fadeIn = clamp(decoy.t / 0.22, 0, 1);
-  var fadeOut = clamp((decoy.dur - decoy.t) / 0.3, 0, 1);
-
-  if (Sprites.ready) {
-    var rising = fadeIn < 1;
-    var list = Sprites.clipOf('decoy', rising ? 'pop' : 'idle');
-    var name = rising ? Sprites.pickFrame(list, fadeIn)
-                      : Sprites.loopFrame(list, decoy.bob * 0.7);
-    if (name) {
-      ctx.save();
-      ctx.globalAlpha = 0.95 * fadeOut;
-      Sprites.clipHoleMouth(ctx, p.x, p.y);
-      Sprites.drawMoleFrame(ctx, name, p.x, p.y);
-      ctx.restore();
-      return;
-    }
-  }
-
-  drawMoleAt(p.x, p.y, easeOutBack(fadeIn), {
-    decoy: true,
-    alpha: 0.95 * fadeOut,
-    sy: 1 + Math.sin(decoy.bob * 7) * 0.05,
-    sx: 1 - Math.sin(decoy.bob * 7) * 0.03,
-    facing: Math.sin(decoy.bob * 2) > 0 ? 1 : -1
-  });
 }
 
 function drawPickup() {
@@ -2199,7 +2194,6 @@ function drawArena() {
     for (var c = 0; c < COLS; c++) {
       var cell = idx(c, r);
       if (mole && moleCell() === cell) { drawUndergroundTell(); drawPlayerMole(); }
-      if (decoy && decoy.cell === cell) drawDecoy();
     }
     for (c = 0; c < COLS; c++) drawHoleLip(idx(c, r));
     for (c = 0; c < COLS; c++) drawBlocked(idx(c, r));
@@ -2601,7 +2595,6 @@ window.__game = {
   get blocked() { return blocked; },
   get frenzy() { return frenzy; },
   get golden() { return golden; },
-  get decoy() { return decoy; },
   get pickup() { return pickup; },
   get comboTier() { return comboTier; },
   get timeScale() { return timeScale; },
@@ -2617,7 +2610,7 @@ window.__game = {
   },
   clearInvuln: function () { mole.invuln = 0; mole.stun = 0; mole.dazed = 0; },
   clearBlocked: function () { for (var i = 0; i < NCELLS; i++) blocked[i] = 0; },
-  clearWildcard: function () { endWildcard(); frenzy = 0; golden = 0; decoy = null; pickup = null; wildTimer = 9999; },
+  clearWildcard: function () { endWildcard(); frenzy = 0; golden = 0; pickup = null; wildTimer = 9999; },
   freezeWildcards: function () { wildTimer = 999999; },
   setSpawn: function (v) { spawnTimer = v; },
   holePos: function () { return holePos; },

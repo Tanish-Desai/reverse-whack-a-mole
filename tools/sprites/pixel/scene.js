@@ -78,7 +78,7 @@ function renderScene(opts) {
     { cell: 4, rise: 1 }, { cell: 5, rise: 0.62 },
     { cell: 6, rise: 0.28, opts: { expr: 'closed' } },
     { cell: 8, rise: 1, opts: { variant: 'gold' } },
-    { cell: 11, rise: 1, opts: { variant: 'decoy' } }
+    { cell: 11, rise: 1, opts: { expr: 'hurt' } }
   ];
 
   pos.forEach(function (p, i) {

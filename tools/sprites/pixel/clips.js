@@ -45,10 +45,10 @@ var CLIPS = [
   },
   {
     name: 'dazed',
-    frames: 6,
-    /* stars orbit a full turn across the clip */
+    frames: 4,
+    /* the lump's impact ticks sweep a full turn across the clip */
     sample: function (u, i, n) {
-      return { rise: 1, sx: 1, sy: 1, dazed: true, t: (i / n) * (Math.PI * 2 / 3) };
+      return { rise: 1, sx: 1, sy: 1, dazed: true, t: (i / n) * Math.PI * 2 };
     }
   },
   {
@@ -58,7 +58,7 @@ var CLIPS = [
   }
 ];
 
-var VARIANTS = ['base', 'gold', 'decoy'];
+var VARIANTS = ['base', 'gold'];
 
 function buildPixelFrames(variantFilter) {
   var out = [];
@@ -74,7 +74,7 @@ function buildPixelFrames(variantFilter) {
           rise: p.rise, dy: p.dy || 0,
           opts: {
             sx: p.sx, sy: p.sy, variant: v, facing: 1, t: p.t || 0,
-            expr: p.dazed ? 'dazed' : (p.closedEyes ? 'closed' : 'normal')
+            expr: p.dazed ? 'hurt' : (p.closedEyes ? 'closed' : 'normal')
           }
         });
       }

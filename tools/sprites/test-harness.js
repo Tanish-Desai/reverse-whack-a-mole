@@ -79,10 +79,7 @@ section('palette variants');
 function pixelsOf(f) { return Buffer.from(f.canvas.getContext('2d').getImageData(0, 0, f.w, f.h).data); }
 var baseIdle = frameByName('base.idle.00');
 var goldIdle = frameByName('gold.idle.00');
-var decoyIdle = frameByName('decoy.idle.00');
 check('gold differs from base', !pixelsOf(goldIdle).equals(pixelsOf(baseIdle)) || goldIdle.w !== baseIdle.w);
-check('decoy differs from base', !pixelsOf(decoyIdle).equals(pixelsOf(baseIdle)) || decoyIdle.w !== baseIdle.w);
-check('decoy is taller than base (wind-up key)', decoyIdle.h > baseIdle.h, decoyIdle.h + ' vs ' + baseIdle.h);
 
 /* --- determinism --------------------------------------------------- */
 section('determinism');
@@ -122,7 +119,7 @@ for (var i = 0; i < rects.length && !overlap; i++) {
 }
 check('no two frames overlap', !overlap, overlap);
 
-check('clip index covers all clips', Object.keys(atlas.clips).length === 15, Object.keys(atlas.clips).length + ' clips');
+check('clip index covers all clips', Object.keys(atlas.clips).length === 10, Object.keys(atlas.clips).length + ' clips');
 check('clips are in playback order', Object.keys(atlas.clips).every(function (k) {
   var seq = atlas.clips[k];
   return seq.every(function (nm, idx) { return Number(nm.split('.').pop()) === idx; });

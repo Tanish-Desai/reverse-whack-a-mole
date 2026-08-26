@@ -12,7 +12,7 @@ var GLYPH = {
   grass_dk: 'g', grass_md: 'G', grass_lt: '"', grass_pl: "'",
   metal_dk: 'm', metal_md: 'M', metal_lt: 'A',
   gold_dk: '$', gold_md: 'S', gold_lt: 's',
-  teal_dk: 't', teal_md: 'T', teal_lt: 'c', teal_pl: 'C'
+  red_dk: 'r', red_md: 'R', red_lt: 'e'
 };
 
 function ascii(buf, variant) {

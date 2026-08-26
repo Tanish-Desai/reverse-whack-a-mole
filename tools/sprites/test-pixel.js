@@ -94,8 +94,6 @@ var base = MOLE.drawMole({});
 var gold = MOLE.drawMole({ variant: 'gold' });
 check('gold keeps the base silhouette', silhouette(base) === silhouette(gold));
 check('gold actually changes colours', base.d.join(',') !== gold.d.join(','));
-var decoy = MOLE.drawMole({ variant: 'decoy' });
-check('decoy adds the wind-up key', silhouette(decoy) !== silhouette(base));
 
 /* --- squash + stretch ---------------------------------------------- */
 section('squash and stretch');
@@ -138,8 +136,11 @@ Object.keys(byClip).forEach(function (k) {
   });
 });
 check('no duplicate frames inside a clip', dupes.length === 0, dupes.slice(0, 5).join(', '));
-check('dazed stars actually rotate',
-  MOLE.drawMole({ expr: 'dazed', t: 0 }).d.join(',') !== MOLE.drawMole({ expr: 'dazed', t: 2 }).d.join(','));
+check('hurt lump impact ticks animate',
+  MOLE.drawMole({ expr: 'hurt', t: 0 }).d.join(',') !== MOLE.drawMole({ expr: 'hurt', t: 2 }).d.join(','));
+check('hurt adds a lump the neutral pose lacks',
+  MOLE.drawMole({ expr: 'hurt' }).d.indexOf(PAL.INDEX.red_md) >= 0
+  && MOLE.drawMole({}).d.indexOf(PAL.INDEX.red_md) < 0);
 check('idle bob is a whole-pixel offset, not a scale',
   (function () {
     var f = buildPixelFrames(['base']).filter(function (x) { return x.clip === 'idle'; });

@@ -23,10 +23,15 @@ var RAMPS = {
   belly_lt:  '#edd0a4',
 
   /* face */
-  nose_dk:   '#d15f7a',
-  nose_lt:   '#ff8fa8',
-  eye_wht:   '#fff3dd',
-  eye_dk:    '#1b1109',
+  nose_dk:   '#1a1208',
+  nose_lt:   '#4a3520',
+  eye_wht:   '#ffffff',
+  eye_dk:    '#120c06',
+
+  /* the lump raised by a hammer */
+  red_dk:    '#8c1f1f',
+  red_md:    '#e33a3a',
+  red_lt:    '#ff7a6e',
 
   /* dirt + wood (shared ramp) */
   dirt_dk:   '#3d2612',
@@ -49,13 +54,7 @@ var RAMPS = {
   /* gold variant */
   gold_dk:   '#c78a10',
   gold_md:   '#ffc93c',
-  gold_lt:   '#ffe9a3',
-
-  /* decoy variant */
-  teal_dk:   '#1f7d80',
-  teal_md:   '#2fa8ab',
-  teal_lt:   '#54c9cc',
-  teal_pl:   '#bff0f0'
+  gold_lt:   '#ffe9a3'
 };
 
 var NAMES = Object.keys(RAMPS);
@@ -67,17 +66,13 @@ var RGB = NAMES.map(function (n) {
   return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 });
 
-/* Variant remaps: swap the fur ramp for gold / decoy without
-   duplicating a single line of the mole drawing code. */
+/* Variant remaps: swap the fur ramp for gold without duplicating a
+   single line of the mole drawing code. */
 var VARIANT_MAPS = {
   base: {},
   gold: {
     fur_dk: 'gold_dk', fur_md: 'gold_md', fur_lt: 'gold_lt',
     belly_dk: 'gold_md', belly_lt: 'gold_lt'
-  },
-  decoy: {
-    fur_dk: 'teal_dk', fur_md: 'teal_md', fur_lt: 'teal_lt',
-    belly_dk: 'teal_lt', belly_lt: 'teal_pl'
   }
 };
 

@@ -14,8 +14,7 @@
   else root.MoleArt = factory();
 })(typeof self !== 'undefined' ? self : this, function () {
 
-var FUR       = { dark: '#6b4526', mid: '#8a5c33', light: '#a9743f', belly: '#d8b184' };
-var DECOY_FUR = { dark: '#1f7d80', mid: '#2fa8ab', light: '#54c9cc', belly: '#bff0f0' };
+var FUR = { dark: '#6b4526', mid: '#8a5c33', light: '#a9743f', belly: '#d8b184' };
 
 /* The mole's full vertical travel from underground to fully up.
    drawMoleAt maps rise 0..1 across this distance. */
@@ -42,7 +41,7 @@ function star(ctx, x, y, r1, r2, points, rot) {
 
 /* Body, drawn centred on the current transform origin. */
 function drawMoleBody(ctx, o) {
-  var fur = o.decoy ? DECOY_FUR : FUR;
+  var fur = FUR;
   var sx = o.sx, sy = o.sy;
 
   ctx.save();
@@ -116,7 +115,7 @@ function drawMoleBody(ctx, o) {
   }
 
   /* nose */
-  ctx.fillStyle = o.decoy ? '#ff8fb3' : '#ff8fa8';
+  ctx.fillStyle = '#ff8fa8';
   ellipse(ctx, 0, 8, 8, 6.5); ctx.fill();
   ctx.strokeStyle = 'rgba(120,40,60,0.5)';
   ctx.lineWidth = 2; ctx.stroke();
@@ -156,15 +155,6 @@ function drawMoleBody(ctx, o) {
     ctx.moveTo(26 + c * 5, 44); ctx.lineTo(26 + c * 5, 48);
   }
   ctx.stroke();
-
-  /* wind-up key marks the decoy as a fake */
-  if (o.decoy) {
-    ctx.strokeStyle = '#0f5c5e';
-    ctx.lineWidth = 5;
-    ctx.beginPath(); ctx.moveTo(0, -46); ctx.lineTo(0, -62); ctx.stroke();
-    ctx.beginPath(); ctx.arc(-9, -66, 9, 0, Math.PI * 2); ctx.stroke();
-    ctx.beginPath(); ctx.arc(9, -66, 9, 0, Math.PI * 2); ctx.stroke();
-  }
 
   ctx.restore();
 }
@@ -210,7 +200,7 @@ function drawMoleAt(ctx, x, y, rise, o) {
   drawMoleBody(ctx, {
     sx: o.sx === undefined ? 1 : o.sx,
     sy: o.sy === undefined ? 1 : o.sy,
-    gold: o.gold, decoy: o.decoy, dazed: o.dazed,
+    gold: o.gold, dazed: o.dazed,
     closedEyes: o.closedEyes, facing: o.facing
   });
   ctx.restore();
@@ -220,7 +210,6 @@ function drawMoleAt(ctx, x, y, rise, o) {
 
 return {
   FUR: FUR,
-  DECOY_FUR: DECOY_FUR,
   RISE_TRAVEL: RISE_TRAVEL,
   drawMoleBody: drawMoleBody,
   drawDazeStars: drawDazeStars,

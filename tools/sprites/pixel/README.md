@@ -39,7 +39,7 @@ transform, so every frame lands on whole pixels.
 
 | File | Role |
 |---|---|
-| `palette.js` | the shared colour table + variant remaps (gold, decoy) |
+| `palette.js` | the shared colour table + the gold variant remap |
 | `raster.js` | indexed buffer, integer primitives, auto-outline |
 | `mole.js` | parametric mole, squash-aware |
 | `holes.js` | open hole, near-lip overlay, boarded hole |
@@ -49,6 +49,17 @@ transform, so every frame lands on whole pixels.
 | `scene.js` | game-scale composite preview |
 | `png.js` | indexed buffer -> canvas |
 | `ascii.js` | terminal debug view |
+
+## Poses
+
+`mole.js` is drawn from reference art: a rounded dome body with no visible
+ears, oversized eyes with heavy black pupils, a large black nose over two
+freckled cream muzzle lobes, buck teeth, long whiskers reaching outside the
+silhouette, and clawed cream paws on the rim.
+
+Expressions are `normal`, `closed` (mid-burrow, and the game-over pancake)
+and `hurt` — squeezed eyes, angled brows, and a red lump with impact ticks
+sweeping around it. The `dazed` clip uses `hurt`.
 
 ## Two things worth knowing
 
@@ -62,8 +73,10 @@ without the overlay.
 pixels: the vector idle's 2% scale bob rounds to *no change at all* at this
 resolution. The pixel idle is a 1px vertical offset instead. `clips.js` is
 tuned so no two frames in a clip come out identical — there's a test for it,
-and it caught two real bugs (a clamped overshoot flattening `pop`, and 3-fold
-star symmetry aliasing `dazed`).
+and it has caught three real bugs: a clamped overshoot flattening `pop` into
+two identical frames, 3-fold star symmetry aliasing the old `dazed`, and a
+symmetric sine pulse on the hurt lump's impact ticks doing the same. The ticks
+now sweep instead of pulsing, from unevenly spaced starts.
 
 ## Output
 

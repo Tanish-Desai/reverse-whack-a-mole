@@ -1,22 +1,29 @@
 /* ============================================================
    Mole sprite, drawn parametrically on the pixel grid.
 
+   Modelled on the reference art: a rounded dome body with no
+   visible ears, oversized eyes with heavy black pupils, a large
+   black nose over two freckled cream muzzle lobes, prominent
+   buck teeth, long whiskers reaching well outside the silhouette,
+   and two clawed cream paws resting on the rim.
+
    Squash and stretch modulate the body's pixel radii directly
    rather than scaling a rendered image, so every frame lands on
-   whole pixels and the silhouette stays crisp through the whole
-   animation.
+   whole pixels.
    ============================================================ */
 'use strict';
 
 var { Buf } = require('./raster.js');
 var PAL = require('./palette.js');
 
-/* Logical art size at rest. */
-var BODY_RX = 15, BODY_RY = 16;
+/* Logical art size at rest. The body is a capsule: a dome of
+   BODY_RX radius on top of straight sides down to BODY_RY. */
+var BODY_RX = 17, BODY_RY = 18;
 
-/* Canvas big enough for the widest squash plus outline margin. */
-var W = 76, H = 64;
-var CX = 38, CY = 31;
+/* Canvas big enough for the widest squash, the whiskers and the
+   hurt lump, plus outline margin. */
+var W = 92, H = 80;
+var CX = 46, CY = 40;
 
 function drawMole(o) {
   o = o || {};
@@ -25,140 +32,151 @@ function drawMole(o) {
   var v = o.variant || 'base';
   var facing = o.facing || 1;
   var expr = o.expr || 'normal';
+  var t = o.t || 0;
 
   var c = function (n) { return PAL.idx(n, v); };
   var b = new Buf(W, H);
 
-  var rx = Math.max(3, Math.round(BODY_RX * sx));
-  var ry = Math.max(3, Math.round(BODY_RY * sy));
+  var rx = Math.max(4, Math.round(BODY_RX * sx));
+  var ry = Math.max(4, Math.round(BODY_RY * sy));
 
-  /* Feature offsets track the squash so the face stays anchored
-     to the body instead of floating. */
+  /* Feature offsets track the squash so the face stays anchored. */
   var fx = rx / BODY_RX, fy = ry / BODY_RY;
-
-  /* Half-width of the body ellipse at row offset dy — lets detail
-     attach to the actual silhouette instead of a guessed edge. */
-  var halfAt = function (dy) {
-    var k = 1 - (dy * dy) / (ry * ry);
-    return k <= 0 ? 0 : Math.round(rx * Math.sqrt(k));
-  };
   var px = function (n) { return Math.round(n * fx); };
   var py = function (n) { return Math.round(n * fy); };
 
-  /* ---- ears (behind the head) ---- */
-  var earX = px(10), earY = -py(14), earR = Math.max(2, Math.round(3 * Math.min(fx, fy)));
+  var top = CY - ry;
+  var domeR = Math.min(rx, ry);
+  var domeCY = top + domeR;
+
+  /* Half-width of the silhouette at an absolute row — lets whiskers
+     and paws attach to the real edge rather than a guessed one. */
+  function halfAt(y) {
+    if (y < domeCY) {
+      var d = (y - domeCY) / domeR;
+      var k = 1 - d * d;
+      return k <= 0 ? 0 : Math.round(rx * Math.sqrt(k));
+    }
+    return rx;
+  }
+
+  /* ---- body: dome over straight sides, three flat bands ---- */
+  b.ellipse(CX, domeCY, rx, domeR, c('fur_dk'));
+  b.rect(CX - rx, domeCY, rx * 2 + 1, (CY + ry) - domeCY, c('fur_dk'));
+  /* inset one pixel for the mid tone, leaving a dark rim */
+  b.ellipse(CX, domeCY, rx - 1, domeR - 1, c('fur_md'));
+  b.rect(CX - rx + 1, domeCY, (rx - 1) * 2 + 1, (CY + ry) - domeCY, c('fur_md'));
+  /* the reference keeps the body flat mid-brown with a darker cap over
+     the crown and only a small highlight, not a broad lit dome */
+  b.halfEllipse(CX, domeCY, rx - 1, domeR - 1, c('fur_dk'), 'top');
+  b.halfEllipse(CX, domeCY + 2, rx - 2, domeR - 2, c('fur_md'), 'top');
+  b.ellipse(CX - Math.round(rx * 0.34), domeCY - Math.round(domeR * 0.30),
+            Math.round(rx * 0.26), Math.round(domeR * 0.20), c('fur_lt'));
+
+  /* ---- brows ---- */
+  var eyX = px(7), eyY = CY - py(5);
+  var browY = eyY - py(6);
   [-1, 1].forEach(function (s) {
-    b.circle(CX + s * earX, CY + earY, earR, c('fur_dk'));
-    if (earR >= 3) b.circle(CX + s * earX, CY + earY - 1, earR - 2, c('belly_dk'));
+    var x = CX + s * eyX;
+    if (expr === 'hurt') {
+      /* pinched inward and down */
+      for (var i = 0; i < 5; i++) b.set(x - s * 2 + s * i, browY + 1 + Math.floor(i * 0.7), c('fur_dk'));
+    } else {
+      b.hline(x - 2, browY, 5, c('fur_dk'));
+      b.set(x - 3, browY + 1, c('fur_dk'));
+      b.set(x + 3, browY + 1, c('fur_dk'));
+    }
   });
-
-  /* ---- body: three flat bands, light from the upper left ---- */
-  b.ellipse(CX, CY, rx, ry, c('fur_dk'));
-  b.ellipse(CX, CY - 1, rx - 1, ry - 1, c('fur_md'));
-  b.ellipse(CX - Math.round(rx * 0.28), CY - Math.round(ry * 0.30),
-            Math.round(rx * 0.55), Math.round(ry * 0.50), c('fur_lt'));
-
-  /* ---- muzzle ---- */
-  var mzY = py(5);
-  b.ellipse(CX, CY + mzY, px(8), py(5), c('belly_dk'));
-  b.ellipse(CX, CY + mzY - 1, px(7), py(4), c('belly_lt'));
 
   /* ---- eyes ---- */
-  var eyX = px(5), eyY = -py(5);
-  if (expr === 'dazed') {
-    [-1, 1].forEach(function (s) {
-      var x = CX + s * eyX, y = CY + eyY;
-      b.line(x - 2, y - 2, x + 2, y + 2, c('eye_dk'));
-      b.line(x + 2, y - 2, x - 2, y + 2, c('eye_dk'));
-    });
-  } else if (expr === 'closed') {
-    [-1, 1].forEach(function (s) {
-      var x = CX + s * eyX, y = CY + eyY;
-      b.hline(x - 2, y, 5, c('eye_dk'));
-      b.set(x - 3, y - 1, c('eye_dk'));
-      b.set(x + 3, y - 1, c('eye_dk'));
-    });
-  } else {
-    var look = facing * 1;
-    [-1, 1].forEach(function (s) {
-      var x = CX + s * eyX, y = CY + eyY;
-      b.ellipse(x, y, 2, 2, c('eye_wht'));
-      b.rect(x - 1 + look, y - 1, 2, 2, c('eye_dk'));
-    });
-  }
-
-  /* ---- nose ---- */
-  var nsY = CY + py(2);
-  b.ellipse(CX, nsY, 2, 1, c('nose_dk'));
-  b.hline(CX - 1, nsY - 1, 2, c('nose_lt'));
-
-  /* ---- mouth ---- */
-  var moY = CY + py(6);
-  if (expr === 'dazed') {
-    b.hline(CX - 1, moY, 3, c('outline'));
-    b.set(CX - 2, moY - 1, c('outline'));
-    b.set(CX + 2, moY - 1, c('outline'));
-  } else {
-    b.set(CX - 2, moY, c('outline'));
-    b.set(CX + 2, moY, c('outline'));
-    b.hline(CX - 1, moY + 1, 3, c('outline'));
-  }
-
-  /* ---- front teeth: the detail that reads "mole" at this size ---- */
-  b.rect(CX - 2, moY + 2, 2, 2, c('eye_wht'));
-  b.rect(CX + 1, moY + 2, 2, 2, c('eye_wht'));
-  b.vline(CX, moY + 2, 2, c('outline'));
-
-  /* ---- paws ---- */
-  var pawY = CY + ry - py(3), pawX = px(8);
   [-1, 1].forEach(function (s) {
-    var x = CX + s * pawX;
-    b.ellipse(x, pawY, 4, 3, c('belly_dk'));
-    b.ellipse(x, pawY - 1, 3, 2, c('belly_lt'));
-    b.set(x - 1, pawY + 1, c('fur_dk'));
-    b.set(x + 1, pawY + 1, c('fur_dk'));
+    var x = CX + s * eyX;
+    if (expr === 'hurt') {
+      /* squeezed shut: two strokes converging toward the nose */
+      for (var i = 0; i < 4; i++) {
+        b.set(x - s * 3 + s * i, eyY - 3 + i, c('eye_dk'));
+        b.set(x - s * 3 + s * i, eyY + 3 - i, c('eye_dk'));
+      }
+    } else if (expr === 'closed') {
+      b.hline(x - 3, eyY, 7, c('eye_dk'));
+      b.set(x - 4, eyY - 1, c('eye_dk'));
+      b.set(x + 4, eyY - 1, c('eye_dk'));
+    } else {
+      b.ellipse(x, eyY, 4, 4, c('eye_wht'));
+      var look = facing * 1;
+      b.ellipse(x + look, eyY + 1, 2, 3, c('eye_dk'));
+      b.set(x + look - 1, eyY - 1, c('eye_wht'));
+    }
   });
 
-  /* ---- decoy wind-up key ---- */
-  if (v === 'decoy') {
-    b.vline(CX, CY - ry - 4, 4, c('teal_dk'));
-    b.circle(CX - 2, CY - ry - 5, 2, c('teal_dk'));
-    b.circle(CX + 2, CY - ry - 5, 2, c('teal_dk'));
-  }
+  /* ---- muzzle lobes, freckled ---- */
+  var mzY = CY + py(6);
+  [-1, 1].forEach(function (s) {
+    var x = CX + s * px(5);
+    b.ellipse(x, mzY, 7, 5, c('belly_dk'));
+    b.ellipse(x, mzY - 1, 6, 4, c('belly_lt'));
+  });
+  [-1, 1].forEach(function (s) {
+    var x = CX + s * px(7);
+    b.set(x - 1, mzY - 1, c('belly_dk'));
+    b.set(x + 2, mzY + 1, c('belly_dk'));
+    b.set(x - 2, mzY + 2, c('belly_dk'));
+  });
+
+  /* ---- nose: large, black, with a shine ---- */
+  var nsY = CY + py(2);
+  b.ellipse(CX, nsY, 4, 3, c('nose_dk'));
+  b.ellipse(CX, nsY + 1, 2, 1, c('nose_dk'));
+  b.set(CX - 2, nsY - 2, c('eye_wht'));
+  b.set(CX - 1, nsY - 2, c('nose_lt'));
+
+  /* ---- buck teeth ---- */
+  var thY = mzY + 3;
+  b.rect(CX - 4, thY, 4, 6, c('eye_wht'));
+  b.rect(CX + 1, thY, 4, 6, c('eye_wht'));
+  b.vline(CX, thY, 6, c('outline'));
+
+  /* ---- paws on the rim, three claws each. Drawn before the outline
+     pass but with their own rim, so they read as separate from the
+     body the way the reference does. ---- */
+  var pawY = CY + ry - py(3), pawX = px(9);
+  [-1, 1].forEach(function (s) {
+    var x = CX + s * pawX;
+    b.ellipse(x, pawY, 5, 4, c('outline'));
+    b.ellipse(x, pawY, 4, 3, c('belly_dk'));
+    b.ellipse(x, pawY - 1, 3, 2, c('belly_lt'));
+    for (var k = -1; k <= 1; k++) b.vline(x + k * 2, pawY + 1, 3, c('outline'));
+  });
 
   b.outline(c('outline'), true);
 
-  /* Whiskers go on after the outline pass, otherwise the auto-outline
-     wraps each hair and they read as solid planks. */
-  [-1, 1].forEach(function (sgn) {
-    [py(2), py(5)].forEach(function (dy, i) {
-      var edge = CX + sgn * (halfAt(dy) + 1);
-      var len = 3 - i;
-      for (var k = 0; k < len; k++) b.poke(edge + sgn * (k + 1), CY + dy, c('outline'));
+  /* ---- whiskers: three a side, drawn after outlining so the
+     auto-outline cannot fatten them into planks ---- */
+  [-1, 1].forEach(function (s) {
+    [[py(2), 12, -1], [py(6), 13, 0], [py(10), 11, 1]].forEach(function (w) {
+      var y = CY + w[0], len = w[1], slope = w[2];
+      var edge = CX + s * (halfAt(y) + 1);
+      for (var k = 0; k < len; k++) {
+        b.poke(edge + s * (k + 1), y + slope * Math.floor(k / 3), c('outline'));
+      }
     });
   });
 
-  /* Orbiting daze stars. Pixel stars are drawn as plus-shapes —
-     anything smaller than 3x3 reads as noise at this scale. */
-  if (expr === 'dazed') {
-    var t = o.t || 0;
-    for (var si = 0; si < 3; si++) {
-      var ang = t + (si / 3) * Math.PI * 2;
-      var sxp = CX + Math.round(Math.cos(ang) * 15);
-      var syp = CY - ry - 4 + Math.round(Math.sin(ang) * 4);
-      b.poke(sxp, syp, PAL.INDEX.gold_lt);
-      b.poke(sxp - 1, syp, PAL.INDEX.gold_md);
-      b.poke(sxp + 1, syp, PAL.INDEX.gold_md);
-      b.poke(sxp, syp - 1, PAL.INDEX.gold_md);
-      b.poke(sxp, syp + 1, PAL.INDEX.gold_md);
-    }
-  }
-
-  /* Catchlight last so nothing overwrites it. */
-  if (expr === 'normal') {
-    var exl = px(5), eyl = -py(5), lk = facing * 1;
-    [-1, 1].forEach(function (sgn) {
-      b.poke(CX + sgn * exl - 1 + lk, CY + eyl - 1, c('eye_wht'));
+  /* ---- the lump a hammer leaves ---- */
+  if (expr === 'hurt') {
+    var bx = CX + px(7), by = top + 2;
+    b.ellipse(bx, by, 6, 5, c('outline'));
+    b.ellipse(bx, by, 5, 4, c('red_md'));
+    b.ellipse(bx - 1, by - 1, 3, 2, c('red_lt'));
+    b.set(bx - 2, by - 2, c('eye_wht'));
+    /* Impact ticks sweep around the lump. A symmetric pulse aliased
+       into duplicate frames, so they rotate instead, from unevenly
+       spaced starts that cannot line up with the 3-fold symmetry. */
+    [[-1.15, 4], [-0.40, 3], [0.30, 4]].forEach(function (a) {
+      var ang = a[0] + t;
+      for (var k = 2; k < 2 + a[1]; k++) {
+        b.poke(bx + Math.round(Math.cos(ang) * (6 + k)), by + Math.round(Math.sin(ang) * (5 + k)), c('red_dk'));
+      }
     });
   }
 

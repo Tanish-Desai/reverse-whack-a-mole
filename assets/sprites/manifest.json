@@ -7,10 +7,13 @@
     "fur_lt": "#b07f47",
     "belly_dk": "#c9a074",
     "belly_lt": "#edd0a4",
-    "nose_dk": "#d15f7a",
-    "nose_lt": "#ff8fa8",
-    "eye_wht": "#fff3dd",
-    "eye_dk": "#1b1109",
+    "nose_dk": "#1a1208",
+    "nose_lt": "#4a3520",
+    "eye_wht": "#ffffff",
+    "eye_dk": "#120c06",
+    "red_dk": "#8c1f1f",
+    "red_md": "#e33a3a",
+    "red_lt": "#ff7a6e",
     "dirt_dk": "#3d2612",
     "dirt_md": "#6b4a28",
     "dirt_lt": "#92693c",
@@ -25,11 +28,7 @@
     "metal_lt": "#a8b0be",
     "gold_dk": "#c78a10",
     "gold_md": "#ffc93c",
-    "gold_lt": "#ffe9a3",
-    "teal_dk": "#1f7d80",
-    "teal_md": "#2fa8ab",
-    "teal_lt": "#54c9cc",
-    "teal_pl": "#bff0f0"
+    "gold_lt": "#ffe9a3"
   },
   "assets": {
     "hole": {
@@ -71,6 +70,6 @@
   "moleSheet": {
     "image": "mole-sheet.png",
     "atlas": "mole-atlas.json",
-    "frames": 75
+    "frames": 46
   }
 }

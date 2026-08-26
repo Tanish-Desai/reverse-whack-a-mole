@@ -67,11 +67,10 @@ var CLIPS = [
   }
 ];
 
-/* Palette variants. `decoy` and `gold` are existing wildcard states. */
+/* Palette variants. `gold` is an existing wildcard state. */
 var VARIANTS = [
   { name: 'base',  opts: {} },
-  { name: 'gold',  opts: { gold: true } },
-  { name: 'decoy', opts: { decoy: true } }
+  { name: 'gold',  opts: { gold: true } }
 ];
 
 /* Flatten to a render list. Frame names are `variant.clip.NN`. */

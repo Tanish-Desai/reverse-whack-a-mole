@@ -1,3 +1,9 @@
+@font-face {
+  font-family: "AGoblinAppears";
+  src: url("../assets/fonts/a-goblin-appears-font/AGoblinAppears-o2aV.ttf") format("truetype");
+  font-display: block;
+}
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 html, body {
