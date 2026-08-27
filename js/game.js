@@ -19,6 +19,7 @@ var ARENA_CX = 640, ARENA_CY = 440;
 var MOVE_CD_ABOVE = 0.05;                /* just enough to stop same-frame spam */
 var MOVE_CD_UNDER = 0.04;
 var BURROW_TIME   = 0.20;                /* invulnerable dive */
+var BURROW_CD     = 1.00;                /* wait after surfacing before hiding again */
 var UNDER_TIME    = 3.0;                 /* surface timer */
 var EJECT_STUN    = 0.40;
 var HIT_STUN      = 0.18;                /* input lockout after a bonk  */
@@ -316,6 +317,7 @@ var mole, hammers, particles, floaters, banners;
 var lives, score, scoreF, displayScore, highScore, newHigh;
 var comboTier, comboTimer, nextMilestone;
 var spawnTimer, wildTimer, wild, pickup;
+var pauseIndex = 0;
 var frenzy, golden;
 var shakeMag, shakeTime, shakeDur, flashRed, edgeFlash, dimAmount;
 var stats, firstPlayHintTimer;
@@ -344,6 +346,7 @@ function updateSlowMo(dt) {
   timeScale = k < 0.32 ? slowMin : lerp(slowMin, 1, easeOutCubic((k - 0.32) / 0.68));
 }
 var tutorialStep, tutorialT, tutorialReturn;
+var TUTORIAL_STEPS = 3;
 var menuIndex = 0;          /* 0 = start, 1 = how to play */
 var confetti;
 
@@ -366,7 +369,7 @@ function resetRun() {
   elapsed = 0;
   mole = {
     col: 1, row: 1, state: 'above', tState: 0,
-    under: UNDER_TIME, moveCd: 0, stun: 0, invuln: 0, dazed: 0,
+    under: UNDER_TIME, moveCd: 0, burrowCd: 0, stun: 0, invuln: 0, dazed: 0,
     popAnim: 0, squashY: 1, squashX: 1, bob: Math.random() * 10,
     squished: 0, ejectFlash: 0, facing: 1
   };
@@ -623,6 +626,9 @@ function tryMove(dx, dy) {
 function tryBurrowToggle() {
   var m = mole;
   if (m.stun > 0 || m.state === 'burrowing') return;
+  /* Surfacing arms a cooldown, so hiding cannot be spammed. Coming back
+     up is never gated — only going down. */
+  if (m.state === 'above' && m.burrowCd > 0) return;
   var p = pos(moleCell());
   if (m.state === 'above') {
     m.state = 'burrowing';
@@ -633,6 +639,7 @@ function tryBurrowToggle() {
   } else {
     m.state = 'above';
     m.under = UNDER_TIME;       /* full recharge on voluntary surfacing */
+    m.burrowCd = BURROW_CD;
     m.popAnim = 0.24;
     dustPuff(p.x, p.y - 6, 9, { size: 0.9 });
     Sound.pop(1);
@@ -644,6 +651,7 @@ function forceEject() {
   var p = pos(moleCell());
   m.state = 'above';
   m.under = 0;
+  m.burrowCd = BURROW_CD;
   m.stun = EJECT_STUN;
   m.dazed = EJECT_STUN;
   m.popAnim = 0.4;
@@ -703,6 +711,7 @@ function updateMole(dt) {
   if (m.stun > 0) m.stun -= dt;
   if (m.dazed > 0) m.dazed -= dt;
   if (m.moveCd > 0) m.moveCd -= dt;
+  if (m.burrowCd > 0) m.burrowCd -= dt;
   if (m.squished > 0) m.squished -= dt;
   if (m.ejectFlash > 0) m.ejectFlash -= dt;
   if (m.popAnim > 0) m.popAnim = Math.max(0, m.popAnim - dt);
@@ -1364,20 +1373,32 @@ function onKeyDown(e) {
   }
 
   if (state === S.TUTORIAL) {
-    if (tutorialStep === 0) {
-      if (DIRS[code]) { tutorialStep = 1; tutorialT = 0; Sound.pop(1.1); return; }
-      if (code === 'Space') { finishTutorial(); return; }                        /* skip */
-    } else if (tutorialStep === 1) {
-      if (code === 'Space') { tutorialStep = 2; tutorialT = 0; Sound.dig(true); return; }
-    } else {
-      if (code === 'Space' || code === 'Enter') { finishTutorial(); return; }
+    /* Steps are browsable in both directions. Previously each step only
+       accepted one specific key forward and there was no way back. */
+    var fwd = (code === 'ArrowRight' || code === 'KeyD' ||
+               code === 'ArrowDown'  || code === 'KeyS');
+    var back = (code === 'ArrowLeft' || code === 'KeyA' ||
+                code === 'ArrowUp'   || code === 'KeyW');
+
+    if (back) {
+      if (tutorialStep > 0) { tutorialStep--; tutorialT = 0; Sound.select(); }
+      return;
+    }
+    if (fwd) {
+      if (tutorialStep < TUTORIAL_STEPS - 1) { tutorialStep++; tutorialT = 0; Sound.pop(1.1); }
+      return;
+    }
+    if (code === 'Space' || code === 'Enter') {
+      if (tutorialStep < TUTORIAL_STEPS - 1) { tutorialStep++; tutorialT = 0; Sound.pop(1.1); }
+      else finishTutorial();
+      return;
     }
     if (code === 'Escape') { Store.setTutorialSeen(); goTitle(); }
     return;
   }
 
   if (state === S.PLAYING) {
-    if (code === 'Escape') { state = S.PAUSED; Sound.stopMusic(0.2); return; }
+    if (code === 'Escape') { state = S.PAUSED; pauseIndex = 0; Sound.stopMusic(0.2); return; }
     var d = DIRS[code];
     if (d) {
       tryMove(d[0], d[1]);      /* one press, one step — no repeat, no queue */
@@ -1388,9 +1409,15 @@ function onKeyDown(e) {
   }
 
   if (state === S.PAUSED) {
-    if (code === 'Escape' || code === 'Space' || code === 'Enter') {
-      state = S.PLAYING;
-      Sound.startMusic();
+    if (code === 'Escape') { state = S.PLAYING; Sound.startMusic(); return; }
+    if (code === 'ArrowUp' || code === 'KeyW' || code === 'ArrowDown' || code === 'KeyS') {
+      pauseIndex = 1 - pauseIndex;
+      Sound.select();
+      return;
+    }
+    if (code === 'Space' || code === 'Enter') {
+      if (pauseIndex === 1) { goTitle(); }
+      else { state = S.PLAYING; Sound.startMusic(); }
     }
     return;
   }
@@ -1423,11 +1450,10 @@ function onKeyDown(e) {
 
 window.addEventListener('keydown', onKeyDown, { passive: false });
 
-/* Clicking/tapping the canvas also unlocks audio and acts as "start". */
+/* Clicking the canvas only unlocks audio. It used to double as "start",
+   which meant a stray click launched a run straight past the menu. */
 canvas.addEventListener('pointerdown', function () {
   Sound.unlock();
-  if (state === S.TITLE) { Store.tutorialSeen() ? startGame() : startTutorial('game'); }
-  else if (state === S.PAUSED) { state = S.PLAYING; Sound.startMusic(); }
 });
 
 document.addEventListener('visibilitychange', function () {
@@ -1847,14 +1873,23 @@ function drawUndergroundTell() {
   var p = hp(moleCell());
   var wob = Math.sin(T * 6) * 2;
 
+  /* The tell is the only thing marking the player's position while
+     hidden, so the eyes are drawn big and rimmed rather than as two
+     faint specks lost in a dark hole. */
+  var ex = 15, ey = p.y - 5, drift = wob * 0.3;
   ctx.save();
-  ctx.globalAlpha = 0.85;
-  ctx.fillStyle = '#efe6d4';
-  ellipse(p.x - 9 + wob * 0.3, p.y - 4, 5.5, 4); ctx.fill();
-  ellipse(p.x + 9 + wob * 0.3, p.y - 4, 5.5, 4); ctx.fill();
-  ctx.fillStyle = '#1b1109';
-  circle(p.x - 9 + wob * 0.5, p.y - 3.4, 2.6); ctx.fill();
-  circle(p.x + 9 + wob * 0.5, p.y - 3.4, 2.6); ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ellipse(p.x - ex + drift, ey + 1, 12, 9.5); ctx.fill();
+  ellipse(p.x + ex + drift, ey + 1, 12, 9.5); ctx.fill();
+  ctx.fillStyle = '#fff6e2';
+  ellipse(p.x - ex + drift, ey, 10, 7.5); ctx.fill();
+  ellipse(p.x + ex + drift, ey, 10, 7.5); ctx.fill();
+  ctx.fillStyle = '#120c06';
+  circle(p.x - ex + wob * 0.6, ey + 0.5, 4.8); ctx.fill();
+  circle(p.x + ex + wob * 0.6, ey + 0.5, 4.8); ctx.fill();
+  ctx.fillStyle = '#fff6e2';
+  circle(p.x - ex + wob * 0.6 - 1.6, ey - 1.8, 1.7); ctx.fill();
+  circle(p.x + ex + wob * 0.6 - 1.6, ey - 1.8, 1.7); ctx.fill();
   ctx.restore();
 
   if (Math.random() < 0.06) {
@@ -1865,6 +1900,34 @@ function drawUndergroundTell() {
       alpha: DUST_ALPHA, color: '#7d5836'
     });
   }
+}
+
+/* While the hide cooldown is running, a cool ring fills back up around
+   the hole. Without it a refused burrow just reads as dropped input. */
+function drawBurrowCooldown() {
+  var m = mole;
+  if (m.state !== 'above' || m.burrowCd <= 0) return;
+  var p = hp(moleCell());
+  var frac = clamp(1 - m.burrowCd / BURROW_CD, 0, 1);
+  var rx = HOLE_RX + 20, ry = HOLE_RY + 16;
+
+  ctx.save();
+  ctx.lineWidth = 7;
+  ctx.lineCap = 'round';
+  ctx.globalAlpha = 0.45;
+  ctx.strokeStyle = 'rgba(0,0,0,0.30)';
+  ellipse(p.x, p.y, rx, ry); ctx.stroke();
+
+  /* Sweeps out from the BOTTOM of the ring. The mole is standing on this
+     hole, so the top of the ellipse is behind it and an arc starting
+     there would be invisible for most of the cooldown. */
+  ctx.globalAlpha = 0.95;
+  ctx.strokeStyle = '#7fb2e8';
+  var half = Math.PI * frac;
+  ctx.beginPath();
+  ctx.ellipse(p.x, p.y, rx, ry, 0, Math.PI / 2 - half, Math.PI / 2 + half);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawUndergroundTimer() {
@@ -2221,6 +2284,11 @@ function drawArena() {
     }
   }
 
+  /* After the row loop: the hole's front lip is drawn there and was
+     covering the bottom of the ring, which is the part not already
+     hidden behind the mole. */
+  drawBurrowCooldown();
+
   drawParticles();
   drawFloaters();
 }
@@ -2365,9 +2433,11 @@ function drawTutorialIllustration(step) {
     ctx.restore();
 
     ctx.save();
-    ctx.translate(q.x, q.y - 27 - 64 * (1 - easeInCubic(pr)));
+    ctx.translate(q.x, q.y - 8 - 26 * (1 - easeInCubic(pr)));
     ctx.rotate(-0.16 * (1 - pr));
-    ctx.scale(0.4, 0.4);
+    /* 2/3 keeps whole art pixels (the sprite is drawn at 3x), so this is
+       the next size up that does not smear the pixel grid. */
+    ctx.scale(2 / 3, 2 / 3);
     drawHammerShape(1, 1);
     ctx.restore();
 
@@ -2396,10 +2466,11 @@ function drawTutorial() {
   text(s.body, VW / 2, 250, 24, '#fff3dd', { outline: 4 });
   drawTutorialIllustration(tutorialStep);
 
-  text('STEP ' + (tutorialStep + 1) + ' / 3', VW / 2, 536, 20, '#cfe6c0', { outline: 3 });
+  text('STEP ' + (tutorialStep + 1) + ' / ' + TUTORIAL_STEPS, VW / 2, 536, 20, '#cfe6c0', { outline: 3 });
 
-  var hint = tutorialStep === 0 ? 'Press an ARROW KEY to continue   ·   SPACE to skip'
-           : (tutorialStep === 1 ? 'Press SPACE to continue' : 'Press SPACE to play');
+  var hint = tutorialStep === TUTORIAL_STEPS - 1
+    ? '← → browse   ·   SPACE to play   ·   ESC to skip'
+    : '← → browse   ·   SPACE to continue   ·   ESC to skip';
   ctx.save();
   ctx.globalAlpha = 0.65 + 0.35 * Math.sin(T * 4.5);
   text(hint, VW / 2, VH - 90, 26, '#ffffff', { outline: 5 });
@@ -2411,10 +2482,29 @@ function drawPause() {
   ctx.fillStyle = 'rgba(8,12,6,0.68)';
   ctx.fillRect(0, 0, VW, VH);
   ctx.restore();
-  text('PAUSED', VW / 2, VH / 2 - 30, 78, '#ffd23f', { outline: 12 });
+  text('PAUSED', VW / 2, VH / 2 - 96, 78, '#ffd23f', { outline: 12 });
+
+  var items = ['RESUME', 'QUIT TO MENU'];
+  var pulse = 0.62 + 0.38 * Math.sin(T * 4.2);
+  for (var i = 0; i < items.length; i++) {
+    var iy = VH / 2 + 4 + i * 62;
+    var sel = (i === pauseIndex);
+    var size = sel ? 38 : 30;
+    ctx.save();
+    ctx.globalAlpha = sel ? pulse : 0.62;
+    if (sel) {
+      var wgt = measure(items[i], size) + 96;
+      panel(VW / 2 - wgt / 2, iy - 27, wgt, 54, 14,
+            'rgba(255,210,63,0.13)', 'rgba(255,210,63,0.75)', 3);
+      text('\u25B6', VW / 2 - wgt / 2 + 28, iy, 20, '#ffd23f', { outline: 3 });
+    }
+    text(items[i], VW / 2, iy, size, sel ? '#ffffff' : '#e9f7d8', { outline: sel ? 7 : 5 });
+    ctx.restore();
+  }
+
   ctx.save();
-  ctx.globalAlpha = 0.65 + 0.35 * Math.sin(T * 4.5);
-  text('Press ESC or SPACE to resume', VW / 2, VH / 2 + 48, 28, '#ffffff', { outline: 5 });
+  ctx.globalAlpha = 0.8;
+  text('\u2191\u2193 choose     SPACE select     ESC resume', VW / 2, VH / 2 + 148, 20, '#cfe6c0', { outline: 3 });
   ctx.restore();
 }
 
@@ -2615,6 +2705,8 @@ window.__game = {
   get comboTier() { return comboTier; },
   get timeScale() { return timeScale; },
   get menuIndex() { return menuIndex; },
+  get pauseIndex() { return pauseIndex; },
+  get tutorialStep() { return tutorialStep; },
   get autopilot() { return autopilot; },
   slowMo: function (m, d) { slowMo(m, d); },
   moleCell: function () { return moleCell(); },
@@ -2622,7 +2714,7 @@ window.__game = {
   setMole: function (c, r, st) {
     mole.col = c; mole.row = r;
     if (st) { mole.state = st; mole.tState = 0; if (st === 'under') mole.under = UNDER_TIME; }
-    mole.invuln = 0; mole.stun = 0; mole.moveCd = 0; mole.popAnim = 0;
+    mole.invuln = 0; mole.stun = 0; mole.moveCd = 0; mole.burrowCd = 0; mole.popAnim = 0;
   },
   clearInvuln: function () { mole.invuln = 0; mole.stun = 0; mole.dazed = 0; },
   clearBlocked: function () { for (var i = 0; i < NCELLS; i++) blocked[i] = 0; },

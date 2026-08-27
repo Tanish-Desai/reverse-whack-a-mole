@@ -138,11 +138,47 @@
     ok('arrow keys move the title selection', G.menuIndex === 1, G.menuIndex);
     press('Space');
     ok('HOW TO PLAY opens the tutorial', G.state === 'TUTORIAL', G.state);
-    press('Space');                            /* space skips the tutorial */
+    /* SPACE advances a step now; ESC is the way out */
+    ok('tutorial opens on step 1', G.tutorialStep === 0, G.tutorialStep);
+    press('ArrowRight');
+    ok('arrow key advances a tutorial step', G.tutorialStep === 1, G.tutorialStep);
+    press('ArrowRight');
+    press('ArrowRight');
+    ok('tutorial stops at the last step', G.tutorialStep === 2, G.tutorialStep);
+    press('ArrowLeft');
+    ok('arrow key steps back', G.tutorialStep === 1, G.tutorialStep);
+    press('ArrowLeft');
+    press('ArrowLeft');
+    ok('tutorial stops at the first step', G.tutorialStep === 0, G.tutorialStep);
+    press('Escape');
     ok('tutorial opened from the menu returns to the title', G.state === 'TITLE', G.state);
     ok('returning to the title resets the selection', G.menuIndex === 0, G.menuIndex);
     press('Space');
     ok('START GAME starts a run', G.state === 'PLAYING', G.state);
+
+    /* ---- pause menu ---- */
+    press('Escape');
+    ok('escape pauses', G.state === 'PAUSED', G.state);
+    ok('pause starts on RESUME', G.pauseIndex === 0, G.pauseIndex);
+    press('ArrowDown');
+    ok('arrow keys move the pause selection', G.pauseIndex === 1, G.pauseIndex);
+    press('Space');
+    ok('QUIT TO MENU leaves the run', G.state === 'TITLE', G.state);
+
+    press('Space');
+    ok('back into a run from the title', G.state === 'PLAYING', G.state);
+    press('Escape');
+    press('Space');
+    ok('RESUME returns to play', G.state === 'PLAYING', G.state);
+
+    /* ---- a click must not start or resume anything ---- */
+    G.goTitle();
+    document.getElementById('game').dispatchEvent(
+      new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+    await wait(60);
+    ok('clicking the canvas does not start a run', G.state === 'TITLE', G.state);
+    press('Space');
+    ok('START GAME still starts a run', G.state === 'PLAYING', G.state);
 
     /* ---- burrow / surface timer ---- */
     G.setMole(1, 1, 'above');
@@ -159,11 +195,20 @@
     await wait(1000);
     press('Space');
     ok('space surfaces from underground', G.mole.state === 'above', G.mole.state);
-    await wait(60);
+
+    /* ---- hide cooldown ---- */
+    await wait(80);
+    press('Space');
+    await wait(120);
+    ok('hiding is refused during the cooldown', G.mole.state === 'above',
+       'state=' + G.mole.state + ' cd=' + G.mole.burrowCd.toFixed(2));
+    await wait(950);
+    ok('the cooldown expires', G.mole.burrowCd <= 0, G.mole.burrowCd.toFixed(2));
     press('Space');
     await wait(260);
+    ok('hiding works again once the cooldown clears', G.mole.state === 'under', G.mole.state);
     ok('voluntary surfacing gives a full 3s again (no partial refund)',
-       near(G.mole.under, 3.0, 0.15), G.mole.under);
+       near(G.mole.under, 3.0, 0.25), G.mole.under);
 
     /* ---- forced eject ---- */
     G.setMole(1, 1, 'above');
