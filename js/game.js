@@ -21,7 +21,8 @@ var MOVE_CD_UNDER = 0.04;
 var BURROW_TIME   = 0.20;                /* invulnerable dive */
 var UNDER_TIME    = 3.0;                 /* surface timer */
 var EJECT_STUN    = 0.40;
-var HIT_STUN      = 0.80;
+var HIT_STUN      = 0.18;                /* input lockout after a bonk  */
+var HIT_DAZE      = 0.80;                /* how long the bonk *looks* on */
 var HIT_INVULN    = 1.5;
 var STRIKE_TIME   = 0.30;                /* hammer danger window */
 var RECOVER_TIME  = 0.25;
@@ -30,7 +31,7 @@ var COMBO_WINDOW  = 3.0;
 var MILESTONE     = 15;                  /* seconds per survival bonus */
 var START_LIVES   = 3, MAX_LIVES = 5;
 
-var FONT = 'Verdana, Geneva, "DejaVu Sans", sans-serif';
+var FONT = '"AGoblinAppears", Verdana, Geneva, "DejaVu Sans", sans-serif';
 
 /* Difficulty anchors — interpolated continuously between rows. */
 var PHASES = [
@@ -45,7 +46,6 @@ var WILDCARDS = [
   { id: 'lockdown',  weight: 25, dur: 5, name: 'GRID LOCKDOWN', blurb: 'Holes boarded up!',        color: '#ff9130', icon: 'lock'  },
   { id: 'extralife', weight: 15, dur: 3, name: 'EXTRA LIFE',    blurb: 'Grab it — above ground!',  color: '#ff5c8a', icon: 'heart' },
   { id: 'frenzy',    weight: 20, dur: 4, name: 'FRENZY MODE',   blurb: 'Triple points. Good luck.',color: '#a45cff', icon: 'bolt' },
-  { id: 'decoy',     weight: 15, dur: 4, name: 'DECOY MOLE',    blurb: 'It draws their aim.',      color: '#2fd4d4', icon: 'decoy' },
   { id: 'golden',    weight: 15, dur: 4, name: 'GOLDEN MOLE',   blurb: '5x points. Untouchable.',  color: '#ffd23f', icon: 'star'  }
 ];
 
@@ -106,13 +106,23 @@ function resize() {
   var cssW = Math.floor(VW * s), cssH = Math.floor(VH * s);
   canvas.style.width = cssW + 'px';
   canvas.style.height = cssH + 'px';
-  canvas.width = Math.round(cssW * dpr);
-  canvas.height = Math.round(cssH * dpr);
-  scaleX = canvas.width / VW;
-  scaleY = canvas.height / VH;
-  ctx.imageSmoothingEnabled = true;
+
+  /* The backing store stays an INTEGER multiple of the design
+     resolution. A fractional scale makes some art pixels one screen
+     pixel wide and their neighbours two, which reads as a wobble
+     across the whole picture. CSS scales the result to fit, and
+     image-rendering: pixelated keeps that final step nearest-neighbour. */
+  var k = Math.max(1, Math.round(cssW * dpr / VW));
+  canvas.width = VW * k;
+  canvas.height = VH * k;
+  scaleX = k;
+  scaleY = k;
+  ctx.imageSmoothingEnabled = false;
 }
-function frameReset() { ctx.setTransform(scaleX, 0, 0, scaleY, 0, 0); }
+function frameReset() {
+  ctx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
+  ctx.imageSmoothingEnabled = false;   /* keep pixel art hard-edged */
+}
 window.addEventListener('resize', resize);
 
 /* ------------------------------------------------------------
@@ -127,12 +137,20 @@ function circle(x, y, r) {
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
 }
-function setFont(size, weight) {
-  ctx.font = (weight || 900) + ' ' + size + 'px ' + FONT;
+/* The pixel face renders noticeably larger than the sans-serif the sizes
+   throughout were tuned against, so every call is scaled down once here
+   rather than by editing a hundred literals. measure() runs through the
+   same path, so panels and centring follow automatically. */
+var FONT_SCALE = 0.74;
+
+function setFont(size) {
+  /* No weight: the pixel face ships a single weight, and asking for 900
+     makes the browser synthesise a bold that smears the pixel grid. */
+  ctx.font = Math.max(1, Math.round(size * FONT_SCALE)) + 'px ' + FONT;
 }
 function text(str, x, y, size, fill, opts) {
   opts = opts || {};
-  setFont(size, opts.weight);
+  setFont(size);
   ctx.textAlign = opts.align || 'center';
   ctx.textBaseline = opts.baseline || 'middle';
   if (opts.shadow !== false) {
@@ -153,7 +171,7 @@ function text(str, x, y, size, fill, opts) {
   ctx.fillText(str, x, y);
 }
 function measure(str, size, weight) {
-  setFont(size, weight);
+  setFont(size);
   return ctx.measureText(str).width;
 }
 function panel(x, y, w, h, r, fill, stroke, lw) {
@@ -190,6 +208,11 @@ bgCanvas.width = VW; bgCanvas.height = VH;
 
 function buildBackground() {
   var g = bgCanvas.getContext('2d');
+  g.imageSmoothingEnabled = false;
+
+  /* Pixel grass replaces the whole procedural ground plane. */
+  if (Sprites.ready && Sprites.drawAsset(g, 'grass', 0, 0)) return;
+
   var sky = g.createLinearGradient(0, 0, 0, VH);
   sky.addColorStop(0, '#7ec850');
   sky.addColorStop(0.42, '#63b040');
@@ -292,7 +315,7 @@ var vulnLeft = [];          /* T at which the mole stopped being vulnerable on a
 var mole, hammers, particles, floaters, banners;
 var lives, score, scoreF, displayScore, highScore, newHigh;
 var comboTier, comboTimer, nextMilestone;
-var spawnTimer, wildTimer, wild, decoy, pickup;
+var spawnTimer, wildTimer, wild, pickup;
 var frenzy, golden;
 var shakeMag, shakeTime, shakeDur, flashRed, edgeFlash, dimAmount;
 var stats, firstPlayHintTimer;
@@ -360,7 +383,7 @@ function resetRun() {
   nextMilestone = MILESTONE;
   spawnTimer = 1.1;
   wildTimer = rnd(12, 20);
-  wild = null; decoy = null; pickup = null;
+  wild = null; pickup = null;
   frenzy = 0; golden = 0;
   shakeMag = 0; shakeTime = 0; shakeDur = 1;
   timeScale = 1; slowT = 0; slowDur = 0; slowMin = 1;
@@ -381,6 +404,11 @@ function moleVulnerable() {
 
 function spawnParticle(p) { if (particles.length < 460) particles.push(p); }
 
+/* Dust is atmosphere, not information. At full opacity a bonk's puff
+   completely buried the mole for half a second, which is the one moment
+   the player most needs to see where it is. */
+var DUST_ALPHA = 0.3;
+
 function dustPuff(x, y, n, opts) {
   opts = opts || {};
   var spread = opts.spread || 1;
@@ -391,7 +419,8 @@ function dustPuff(x, y, n, opts) {
       type: 'dust', x: x + rnd(-14, 14), y: y + rnd(-6, 6),
       vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.45 - rnd(20, 90) * spread,
       life: 0, max: rnd(0.35, 0.75), size: rnd(6, 17) * (opts.size || 1),
-      grav: 210, color: opts.color || (Math.random() < 0.5 ? '#a9784b' : '#7d5836')
+      grav: 210, alpha: opts.alpha === undefined ? DUST_ALPHA : opts.alpha,
+      color: opts.color || (Math.random() < 0.5 ? '#a9784b' : '#7d5836')
     });
   }
 }
@@ -632,7 +661,7 @@ function hitMole() {
   lives--;
   stats.hits++;
   m.stun = HIT_STUN;
-  m.dazed = HIT_STUN;
+  m.dazed = HIT_DAZE;
   m.invuln = HIT_INVULN;
   m.squished = 0.35;
   comboTier = 0; comboTimer = 0;
@@ -718,7 +747,10 @@ function updateMole(dt) {
 function cellFree(i) {
   if (blocked[i] > 0) return false;
   for (var h = 0; h < hammers.length; h++) {
-    if (hammers[h].cell === i && hammers[h].phase !== 'recover') return false;
+    /* Any hammer on the cell holds it, recovering ones included. Letting a
+       new hammer target a hole that still had one lifting off it meant a
+       player could be struck by a strike they had no clean frame to read. */
+    if (hammers[h].cell === i) return false;
   }
   return true;
 }
@@ -749,7 +781,13 @@ function spawnHammer(cell, warn, delay) {
     resolved: false,
     wobble: rnd(0, Math.PI * 2),
     tilt: (Math.random() < 0.5 ? -1 : 1) * rnd(0.12, 0.3),
-    scale: rnd(0.94, 1.08),
+    /* Fixed at 1: the old random 0.94-1.08 scaled the sprite by a
+       fraction, which breaks the pixel grid the same way a fractional
+       canvas scale does. Variety comes from tilt and timing instead. */
+    scale: 1,
+    /* Faster hammers clear out faster. warn runs 1.0s early game down to
+       0.4s late, and the arena gets crowded exactly when it is short. */
+    fade: clamp(lerp(0.06, 0.20, (warn - 0.4) / 0.6), 0.06, 0.20),
     queued: false
   };
   hammers.push(h);
@@ -765,9 +803,8 @@ function weightedType(w) {
   return 'pattern';
 }
 
-/* The decoy steals half of all player-seeking aim. */
+
 function aimCell() {
-  if (decoy && Math.random() < 0.5) return decoy.cell;
   return moleCell();
 }
 
@@ -1004,14 +1041,6 @@ function startWildcard() {
   } else if (def.id === 'frenzy') {
     frenzy = def.dur;
 
-  } else if (def.id === 'decoy') {
-    var opts = [];
-    for (i = 0; i < NCELLS; i++) if (blocked[i] <= 0 && i !== moleCell()) opts.push(i);
-    if (!opts.length) opts = [moleCell()];
-    decoy = { cell: pick(opts), t: 0, dur: def.dur, bob: 0 };
-    p = pos(decoy.cell);
-    dustPuff(p.x, p.y - 6, 8, { color: '#2fd4d4', size: 0.9 });
-
   } else if (def.id === 'golden') {
     golden = def.dur;
   }
@@ -1037,16 +1066,6 @@ function updateWildcards(dt) {
     golden -= dt;
     p = pos(moleCell());
     if (Math.random() < dt * 34) sparkle(p.x + rnd(-40, 40), p.y - rnd(10, 90), '#ffd23f');
-  }
-
-  if (decoy) {
-    decoy.t += dt;
-    decoy.bob += dt;
-    if (decoy.t >= decoy.dur) {
-      p = pos(decoy.cell);
-      dustPuff(p.x, p.y - 6, 8, { color: '#2fd4d4', size: 0.8 });
-      decoy = null;
-    }
   }
 
   if (pickup) {
@@ -1426,6 +1445,7 @@ function hp(i) { return holePos[i]; }
 
 function drawHole(i) {
   var p = hp(i);
+  if (Sprites.ready && Sprites.drawAsset(ctx, 'hole', p.x, p.y)) return;
   ctx.save();
 
   /* raised dirt rim */
@@ -1457,6 +1477,7 @@ function drawHole(i) {
 /* Front half of the rim, drawn after entities so the mole sits "in" the hole. */
 function drawHoleLip(i) {
   var p = hp(i);
+  if (Sprites.ready && Sprites.drawAsset(ctx, 'hole-front', p.x, p.y)) return;
   ctx.save();
   ctx.beginPath();
   ctx.ellipse(p.x, p.y, HOLE_RX + 4, HOLE_RY + 4, 0, 0.02 * Math.PI, 0.98 * Math.PI);
@@ -1479,6 +1500,17 @@ function drawBlocked(i) {
   var fade = Math.min(1, blocked[i] / 0.35);
   ctx.save();
   ctx.globalAlpha = fade;
+
+  if (Sprites.ready && Sprites.drawAsset(ctx, 'hole-boarded', p.x, p.y)) {
+    ctx.translate(p.x, p.y);
+    ctx.globalAlpha = fade * (0.28 + 0.16 * Math.sin(T * 9 + i));
+    ctx.strokeStyle = '#ff9130';
+    ctx.lineWidth = 5;
+    ellipse(0, 0, HOLE_RX + 14, HOLE_RY + 12); ctx.stroke();
+    ctx.restore();
+    return;
+  }
+
   ctx.translate(p.x, p.y);
   var planks = [-14, 4, 22];
   for (var k = 0; k < planks.length; k++) {
@@ -1570,6 +1602,12 @@ function drawHammerShape(alpha, scale) {
   ctx.save();
   ctx.scale(scale, scale);
 
+  if (Sprites.ready && Sprites.drawAsset(ctx, 'hammer', 0, 0)) {
+    ctx.restore();
+    ctx.globalAlpha = 1;
+    return;
+  }
+
   /* handle */
   var hg = ctx.createLinearGradient(-14, 0, 14, 0);
   hg.addColorStop(0, '#7a4d22');
@@ -1625,9 +1663,21 @@ function drawHammerShape(alpha, scale) {
 function drawHammer(h) {
   var p = hp(h.cell);
   var raise = hammerRaise(h);
-  var alpha = 1;
-  if (h.phase === 'recover') alpha = 1 - clamp(h.t / RECOVER_TIME, 0, 1) * 0.85;
   if (h.phase === 'delay') return;
+
+  /* The whole of STRIKE_TIME is a live danger window, so the hammer must
+     never vanish while it is still down — a cell that looks clear has to
+     be clear. It drops to half transparency instead, which lets the mole
+     read through the pile-up, then clears out fast once the window has
+     passed. Faster hammers clear faster still. */
+  var alpha = 1;
+  if (h.phase === 'strike') {
+    var settle = clamp((h.t - 0.05) / Math.max(0.01, STRIKE_TIME - 0.05), 0, 1);
+    alpha = 1 - 0.45 * settle;
+  } else if (h.phase === 'recover') {
+    alpha = 0.55 * (1 - clamp(h.t / h.fade, 0, 1));
+  }
+  if (alpha <= 0.01) return;
 
   var tilt;
   if (h.phase === 'warn') {
@@ -1665,11 +1715,11 @@ function drawHammer(h) {
   }
 
   ctx.save();
-  ctx.translate(p.x, p.y - 44 - raise);
+  /* The impact recoil used to be a fractional ctx.scale, which smeared
+     the pixel grid. A whole-pixel bounce reads the same and stays sharp. */
+  var recoil = h.phase === 'strike' ? Math.round(6 * Math.exp(-h.t * 24)) : 0;
+  ctx.translate(p.x, p.y - 44 - raise + recoil);
   ctx.rotate(tilt);
-  var sq = 1;
-  if (h.phase === 'strike') sq = 1 + 0.10 * Math.exp(-h.t * 24);
-  ctx.scale(sq, 1 / sq);
   drawHammerShape(alpha, h.scale);
   ctx.restore();
   ctx.globalAlpha = 1;
@@ -1679,179 +1729,79 @@ function drawHammer(h) {
    15. Rendering — the mole
    ------------------------------------------------------------ */
 
-var FUR = { dark: '#6b4526', mid: '#8a5c33', light: '#a9743f', belly: '#d8b184' };
-var DECOY_FUR = { dark: '#1f7d80', mid: '#2fa8ab', light: '#54c9cc', belly: '#bff0f0' };
+/* Mole art lives in js/mole-art.js so the offline sprite harness in
+   tools/sprites can render the exact same pixels headlessly. These
+   wrappers bind it to this module's ctx and clock. */
 
-function drawMoleBody(o) {
-  var fur = o.decoy ? DECOY_FUR : FUR;
-  var sx = o.sx, sy = o.sy;
-
-  ctx.save();
-  ctx.scale(sx, sy);
-
-  if (o.gold) {
-    ctx.shadowColor = 'rgba(255,210,63,0.9)';
-    ctx.shadowBlur = 26;
-  }
-
-  /* body */
-  var bg = ctx.createLinearGradient(0, -48, 0, 48);
-  bg.addColorStop(0, o.gold ? '#ffe9a3' : fur.light);
-  bg.addColorStop(0.55, o.gold ? '#ffc93c' : fur.mid);
-  bg.addColorStop(1, o.gold ? '#d99b12' : fur.dark);
-  ctx.fillStyle = bg;
-  ellipse(0, 0, 42, 46); ctx.fill();
-  ctx.lineWidth = 4;
-  ctx.strokeStyle = o.gold ? 'rgba(120,80,0,0.75)' : 'rgba(46,28,12,0.8)';
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-
-  /* ears */
-  ctx.fillStyle = o.gold ? '#e8ae1f' : fur.dark;
-  circle(-30, -30, 12); ctx.fill();
-  circle(30, -30, 12); ctx.fill();
-  ctx.fillStyle = o.gold ? '#ffe9a3' : '#c98f66';
-  circle(-30, -30, 6); ctx.fill();
-  circle(30, -30, 6); ctx.fill();
-
-  /* muzzle */
-  ctx.fillStyle = o.gold ? '#fff3c9' : fur.belly;
-  ellipse(0, 16, 28, 21); ctx.fill();
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = 'rgba(46,28,12,0.35)';
-  ctx.stroke();
-
-  /* eyes */
-  var ex = 15, ey = -8;
-  if (o.closedEyes) {
-    ctx.strokeStyle = '#2a1a0c';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.arc(-ex, ey + 2, 8, Math.PI * 1.15, Math.PI * 1.85);
-    ctx.arc(ex, ey + 2, 8, Math.PI * 1.15, Math.PI * 1.85);
-    ctx.stroke();
-  } else if (o.dazed) {
-    ctx.strokeStyle = '#2a1a0c';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.moveTo(-ex - 7, ey - 7); ctx.lineTo(-ex + 7, ey + 7);
-    ctx.moveTo(-ex + 7, ey - 7); ctx.lineTo(-ex - 7, ey + 7);
-    ctx.moveTo(ex - 7, ey - 7); ctx.lineTo(ex + 7, ey + 7);
-    ctx.moveTo(ex + 7, ey - 7); ctx.lineTo(ex - 7, ey + 7);
-    ctx.stroke();
-  } else {
-    ctx.fillStyle = '#fff';
-    circle(-ex, ey, 10); ctx.fill();
-    circle(ex, ey, 10); ctx.fill();
-    ctx.strokeStyle = 'rgba(46,28,12,0.55)';
-    ctx.lineWidth = 2;
-    circle(-ex, ey, 10); ctx.stroke();
-    circle(ex, ey, 10); ctx.stroke();
-    var lookX = (o.facing || 1) * 2.4;
-    ctx.fillStyle = '#1b1109';
-    circle(-ex + lookX, ey + 1, 5.4); ctx.fill();
-    circle(ex + lookX, ey + 1, 5.4); ctx.fill();
-    ctx.fillStyle = '#fff';
-    circle(-ex + lookX + 2, ey - 2.5, 2.1); ctx.fill();
-    circle(ex + lookX + 2, ey - 2.5, 2.1); ctx.fill();
-  }
-
-  /* nose */
-  ctx.fillStyle = o.decoy ? '#ff8fb3' : '#ff8fa8';
-  ellipse(0, 8, 8, 6.5); ctx.fill();
-  ctx.strokeStyle = 'rgba(120,40,60,0.5)';
-  ctx.lineWidth = 2; ctx.stroke();
-
-  /* mouth */
-  ctx.strokeStyle = '#5a3a1c';
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(0, 14);
-  if (o.dazed) { ctx.arc(0, 22, 7, Math.PI * 1.15, Math.PI * 1.85, false); }
-  else { ctx.arc(0, 14, 9, Math.PI * 0.15, Math.PI * 0.85, false); }
-  ctx.stroke();
-
-  /* whiskers */
-  ctx.strokeStyle = 'rgba(40,24,10,0.6)';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  for (var w = -1; w <= 1; w++) {
-    ctx.moveTo(-9, 8 + w * 5); ctx.lineTo(-34, 4 + w * 10);
-    ctx.moveTo(9, 8 + w * 5); ctx.lineTo(34, 4 + w * 10);
-  }
-  ctx.stroke();
-
-  /* paws */
-  ctx.fillStyle = o.gold ? '#ffdd7a' : fur.belly;
-  ellipse(-26, 40, 13, 9); ctx.fill();
-  ellipse(26, 40, 13, 9); ctx.fill();
-  ctx.strokeStyle = 'rgba(46,28,12,0.5)';
-  ctx.lineWidth = 2.5;
-  ellipse(-26, 40, 13, 9); ctx.stroke();
-  ellipse(26, 40, 13, 9); ctx.stroke();
-  ctx.strokeStyle = '#f4e0c0';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  for (var c = -1; c <= 1; c++) {
-    ctx.moveTo(-26 + c * 5, 44); ctx.lineTo(-26 + c * 5, 48);
-    ctx.moveTo(26 + c * 5, 44); ctx.lineTo(26 + c * 5, 48);
-  }
-  ctx.stroke();
-
-  /* wind-up key marks the decoy as a fake */
-  if (o.decoy) {
-    ctx.strokeStyle = '#0f5c5e';
-    ctx.lineWidth = 5;
-    ctx.beginPath(); ctx.moveTo(0, -46); ctx.lineTo(0, -62); ctx.stroke();
-    ctx.beginPath(); ctx.arc(-9, -66, 9, 0, Math.PI * 2); ctx.stroke();
-    ctx.beginPath(); ctx.arc(9, -66, 9, 0, Math.PI * 2); ctx.stroke();
-  }
-
-  ctx.restore();
-}
-
-function drawDazeStars(x, y, count, speed) {
-  for (var i = 0; i < count; i++) {
-    var a = T * speed + (i / count) * Math.PI * 2;
-    var sx = x + Math.cos(a) * 40;
-    var sy = y + Math.sin(a) * 13;
-    ctx.save();
-    ctx.globalAlpha = 0.65 + 0.35 * Math.sin(a * 2);
-    ctx.fillStyle = '#ffe066';
-    star(sx, sy, 9, 4, 5, a * 2);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(120,80,0,0.7)';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.restore();
-  }
-}
-
-/* rise: 0 = fully underground, 1 = fully up */
 function drawMoleAt(x, y, rise, o) {
   o = o || {};
-  var cy = y + 34 - 76 * rise;
+  if (o.t === undefined) o.t = T;
+  MoleArt.drawMoleAt(ctx, x, y, rise, o);
+}
 
+/* Map the mole's live state onto a spritesheet frame. Progress through
+   each clip mirrors the easing the procedural art used, so the timing
+   of every animation is unchanged. */
+function moleFrameName(m, variant) {
+  if (m.squished > 0 && state === S.GAME_OVER) return variant + '.squished.00';
+  if (m.dazed > 0) return Sprites.loopFrame(Sprites.clipOf(variant, 'dazed'), T * 1.5);
+  if (m.state === 'burrowing') {
+    return Sprites.pickFrame(Sprites.clipOf(variant, 'burrow'), clamp(m.tState / BURROW_TIME, 0, 1));
+  }
+  if (m.popAnim > 0) {
+    return Sprites.pickFrame(Sprites.clipOf(variant, 'pop'), clamp((0.4 - m.popAnim) / 0.4, 0, 1));
+  }
+  return Sprites.loopFrame(Sprites.clipOf(variant, 'idle'), m.bob * 0.55);
+}
+
+/* Discrete opacity steps rather than a smooth fade — a stepped flicker
+   is what reads as invulnerability in this era of game. */
+/* The floor is deliberately well above zero. A classic flicker dips to
+   nothing, but the mole is the thing the player is tracking, and the bonk
+   already buries it under a dust puff and a hammer. */
+var BLINK_LEVELS = [1, 0.42, 0.85, 0.6];
+var BLINK_HZ = 14;
+
+function invulnAlpha(m) {
+  if (m.invuln <= 0) return 1;
+  return BLINK_LEVELS[Math.floor(T * BLINK_HZ) % BLINK_LEVELS.length];
+}
+
+/* A tight buzz on the mole itself while it is seeing stars. The screen
+   shake is per-frame noise, so this is deliberately periodic and much
+   faster — the two must not read as the same motion. */
+function dazeJitter(m) {
+  if (m.dazed <= 0) return { x: 0, y: 0 };
+  var k = clamp(m.dazed / HIT_DAZE, 0, 1);
+  var amp = 3 * k;
+  return {
+    x: Math.round(Math.sin(T * 57) * amp),
+    y: Math.round(Math.cos(T * 43) * amp * 0.6)
+  };
+}
+
+function goldenGlow(p) {
+  if (golden <= 0) return;
   ctx.save();
-  ctx.globalAlpha = o.alpha === undefined ? 1 : o.alpha;
+  ctx.globalAlpha = 0.28 + 0.16 * Math.sin(T * 8);
+  ctx.fillStyle = '#ffd23f';
+  circle(p.x, p.y - 40, 78); ctx.fill();
+  ctx.restore();
+}
 
-  /* contact shadow */
+function drawPlayerMoleSprite(m, p) {
+  var name = moleFrameName(m, golden > 0 ? 'gold' : 'base');
+  if (!name) return false;
+  var squished = m.squished > 0 && state === S.GAME_OVER;
+  var j = dazeJitter(m);
   ctx.save();
-  ctx.globalAlpha *= 0.3 * rise;
-  ctx.fillStyle = '#000';
-  ellipse(x, y + 2, 38, 14); ctx.fill();
+  ctx.globalAlpha = invulnAlpha(m);
+  /* The game-over pancake lies flat across the mouth, so it is the one
+     pose that must not be clipped by the rim. */
+  if (!squished) Sprites.clipHoleMouth(ctx, p.x, p.y);
+  var ok = Sprites.drawMoleFrame(ctx, name, p.x + j.x, p.y + j.y);
   ctx.restore();
-
-  ctx.translate(x, cy);
-  drawMoleBody({
-    sx: o.sx === undefined ? 1 : o.sx,
-    sy: o.sy === undefined ? 1 : o.sy,
-    gold: o.gold, decoy: o.decoy, dazed: o.dazed,
-    closedEyes: o.closedEyes, facing: o.facing
-  });
-  ctx.restore();
-
-  if (o.dazed) drawDazeStars(x, cy - 62, 3, 4.2);
+  return ok;
 }
 
 function drawPlayerMole() {
@@ -1860,6 +1810,8 @@ function drawPlayerMole() {
   var rise = 1, sx = 1, sy = 1;
 
   if (m.state === 'under') return;                 /* only the tell shows */
+
+  if (Sprites.ready && drawPlayerMoleSprite(m, p)) { goldenGlow(p); return; }
   if (m.state === 'burrowing') {
     rise = 1 - easeInCubic(clamp(m.tState / BURROW_TIME, 0, 1));
     sx = 1 + 0.18 * (1 - rise);
@@ -1875,8 +1827,7 @@ function drawPlayerMole() {
   var bob = m.state === 'above' && m.stun <= 0 ? Math.sin(m.bob * 4.5) * 0.02 : 0;
   sy += bob; sx -= bob * 0.5;
 
-  var alpha = 1;
-  if (m.invuln > 0 && m.stun <= 0) alpha = 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(T * 26));
+  var alpha = invulnAlpha(m);
 
   if (m.squished > 0 && state === S.GAME_OVER) { sx = 1.75; sy = 0.3; rise = 0.55; }
 
@@ -1887,13 +1838,7 @@ function drawPlayerMole() {
     facing: m.facing
   });
 
-  if (golden > 0) {
-    ctx.save();
-    ctx.globalAlpha = 0.28 + 0.16 * Math.sin(T * 8);
-    ctx.fillStyle = '#ffd23f';
-    circle(p.x, p.y - 40, 78); ctx.fill();
-    ctx.restore();
-  }
+  goldenGlow(p);
 }
 
 /* Subtle "I'm down here" tell: two eyes and a little dirt shiver. */
@@ -1916,7 +1861,8 @@ function drawUndergroundTell() {
     spawnParticle({
       type: 'dust', x: p.x + rnd(-20, 20), y: p.y + 2,
       vx: rnd(-14, 14), vy: rnd(-40, -14),
-      life: 0, max: 0.5, size: rnd(3, 7), grav: 120, color: '#7d5836'
+      life: 0, max: 0.5, size: rnd(3, 7), grav: 120,
+      alpha: DUST_ALPHA, color: '#7d5836'
     });
   }
 }
@@ -1942,20 +1888,6 @@ function drawUndergroundTimer() {
   ctx.ellipse(p.x, p.y, rx, ry, 0, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * frac);
   ctx.stroke();
   ctx.restore();
-}
-
-function drawDecoy() {
-  if (!decoy) return;
-  var p = hp(decoy.cell);
-  var fadeIn = clamp(decoy.t / 0.22, 0, 1);
-  var fadeOut = clamp((decoy.dur - decoy.t) / 0.3, 0, 1);
-  drawMoleAt(p.x, p.y, easeOutBack(fadeIn), {
-    decoy: true,
-    alpha: 0.95 * fadeOut,
-    sy: 1 + Math.sin(decoy.bob * 7) * 0.05,
-    sx: 1 - Math.sin(decoy.bob * 7) * 0.03,
-    facing: Math.sin(decoy.bob * 2) > 0 ? 1 : -1
-  });
 }
 
 function drawPickup() {
@@ -2006,7 +1938,7 @@ function drawParticles() {
     var p = particles[i];
     var k = p.life / p.max;
     ctx.save();
-    ctx.globalAlpha = 1 - k * k;
+    ctx.globalAlpha = (1 - k * k) * (p.alpha === undefined ? 1 : p.alpha);
     if (p.type === 'dust') {
       ctx.fillStyle = p.color;
       circle(p.x, p.y, p.size * (1 - k * 0.45)); ctx.fill();
@@ -2278,7 +2210,6 @@ function drawArena() {
     for (var c = 0; c < COLS; c++) {
       var cell = idx(c, r);
       if (mole && moleCell() === cell) { drawUndergroundTell(); drawPlayerMole(); }
-      if (decoy && decoy.cell === cell) drawDecoy();
     }
     for (c = 0; c < COLS; c++) drawHoleLip(idx(c, r));
     for (c = 0; c < COLS; c++) drawBlocked(idx(c, r));
@@ -2385,10 +2316,12 @@ function drawTutorialIllustration(step) {
   } else if (step === 1) {
     var p = { x: cx + 30, y: 428 };
     ctx.save();
-    ctx.fillStyle = '#7a5533';
-    ellipse(p.x, p.y + 6, HOLE_RX + 14, HOLE_RY + 11); ctx.fill();
-    ctx.fillStyle = '#150d06';
-    ellipse(p.x, p.y, HOLE_RX, HOLE_RY); ctx.fill();
+    if (!(Sprites.ready && Sprites.drawAsset(ctx, 'hole', p.x, p.y))) {
+      ctx.fillStyle = '#7a5533';
+      ellipse(p.x, p.y + 6, HOLE_RX + 14, HOLE_RY + 11); ctx.fill();
+      ctx.fillStyle = '#150d06';
+      ellipse(p.x, p.y, HOLE_RX, HOLE_RY); ctx.fill();
+    }
     ctx.fillStyle = '#efe6d4';
     ellipse(p.x - 9, p.y - 4, 5.5, 4); ctx.fill();
     ellipse(p.x + 9, p.y - 4, 5.5, 4); ctx.fill();
@@ -2413,10 +2346,12 @@ function drawTutorialIllustration(step) {
     var pr = (tutorialT % 1.5) / 1.5;
 
     ctx.save();
-    ctx.fillStyle = '#7a5533';
-    ellipse(q.x, q.y + 6, HOLE_RX + 14, HOLE_RY + 11); ctx.fill();
-    ctx.fillStyle = '#150d06';
-    ellipse(q.x, q.y, HOLE_RX, HOLE_RY); ctx.fill();
+    if (!(Sprites.ready && Sprites.drawAsset(ctx, 'hole', q.x, q.y))) {
+      ctx.fillStyle = '#7a5533';
+      ellipse(q.x, q.y + 6, HOLE_RX + 14, HOLE_RY + 11); ctx.fill();
+      ctx.fillStyle = '#150d06';
+      ellipse(q.x, q.y, HOLE_RX, HOLE_RY); ctx.fill();
+    }
     ctx.globalAlpha = 0.18 + 0.38 * pr;
     ctx.fillStyle = '#ff2f2f';
     ellipse(q.x, q.y, HOLE_RX + 6, HOLE_RY + 6); ctx.fill();
@@ -2436,7 +2371,9 @@ function drawTutorialIllustration(step) {
     drawHammerShape(1, 1);
     ctx.restore();
 
-    drawMoleAt(cx - 150, 462, 1, { facing: 1 });
+    var tutMole = Sprites.ready
+      && Sprites.drawMoleFrame(ctx, Sprites.loopFrame(Sprites.clipOf('base', 'idle'), T * 0.55), cx - 150, 462);
+    if (!tutMole) drawMoleAt(cx - 150, 462, 1, { facing: 1 });
     text('+10 / sec', cx - 150, 356, 22, '#7ed957', { outline: 4 });
   }
 }
@@ -2651,6 +2588,11 @@ function frame(ts) {
 buildGrid();
 buildBackground();
 resize();
+
+/* Sprites load in the background. The game is fully playable on its
+   procedural art until they arrive, and simply stays that way if the
+   assets are missing. */
+Sprites.load().then(function (ok) { if (ok) buildBackground(); });
 Sound.setMuted(Store.muted());
 firstSession = !Store.tutorialSeen();
 goTitle();
@@ -2669,7 +2611,6 @@ window.__game = {
   get blocked() { return blocked; },
   get frenzy() { return frenzy; },
   get golden() { return golden; },
-  get decoy() { return decoy; },
   get pickup() { return pickup; },
   get comboTier() { return comboTier; },
   get timeScale() { return timeScale; },
@@ -2685,7 +2626,7 @@ window.__game = {
   },
   clearInvuln: function () { mole.invuln = 0; mole.stun = 0; mole.dazed = 0; },
   clearBlocked: function () { for (var i = 0; i < NCELLS; i++) blocked[i] = 0; },
-  clearWildcard: function () { endWildcard(); frenzy = 0; golden = 0; decoy = null; pickup = null; wildTimer = 9999; },
+  clearWildcard: function () { endWildcard(); frenzy = 0; golden = 0; pickup = null; wildTimer = 9999; },
   freezeWildcards: function () { wildTimer = 999999; },
   setSpawn: function (v) { spawnTimer = v; },
   holePos: function () { return holePos; },

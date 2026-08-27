@@ -1,0 +1,21 @@
+{
+  "name": "unhammered-sprite-tools",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Offline sprite rendering + packing harness for Unhammered. Not shipped with the game.",
+  "scripts": {
+    "sprites:render": "node tools/sprites/render-frames.js",
+    "sprites:pack": "node tools/sprites/pack-sheet.js",
+    "sprites:build": "npm run sprites:render && npm run sprites:pack",
+    "sprites:test": "node tools/sprites/test-harness.js",
+    "pixel:build": "node tools/sprites/build-pixel.js",
+    "pixel:scene": "node tools/sprites/pixel/scene.js",
+    "pixel:test": "node tools/sprites/test-pixel.js"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^0.1.60"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

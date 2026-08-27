@@ -171,7 +171,6 @@ var Sound = (function () {
     lockdown: [392, 330, 262],
     extralife: [523, 659, 784],
     frenzy: [440, 554, 880],
-    decoy: [587, 494, 587],
     golden: [523, 659, 784, 1047]
   };
   api.chime = function (kind) {

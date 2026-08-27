@@ -1,0 +1,79 @@
+{
+  "scale": 3,
+  "palette": {
+    "outline": "#241408",
+    "fur_dk": "#5b3a1d",
+    "fur_md": "#8a5c33",
+    "fur_lt": "#b07f47",
+    "belly_dk": "#c9a074",
+    "belly_lt": "#edd0a4",
+    "nose_dk": "#1a1208",
+    "nose_lt": "#4a3520",
+    "eye_wht": "#ffffff",
+    "eye_dk": "#120c06",
+    "red_dk": "#8c1f1f",
+    "red_md": "#e33a3a",
+    "red_lt": "#ff7a6e",
+    "dirt_dk": "#3d2612",
+    "dirt_md": "#6b4a28",
+    "dirt_lt": "#92693c",
+    "dirt_pl": "#b98a52",
+    "void": "#150c05",
+    "grass_dk": "#3f8a32",
+    "grass_md": "#57ad40",
+    "grass_lt": "#74cc55",
+    "grass_pl": "#96e070",
+    "metal_dk": "#4a4f5c",
+    "metal_md": "#79808f",
+    "metal_lt": "#a8b0be",
+    "steel_dk": "#22304a",
+    "steel_md": "#3f6193",
+    "steel_lt": "#6a94c6",
+    "steel_pl": "#a9cbe8",
+    "gold_dk": "#c78a10",
+    "gold_md": "#ffc93c",
+    "gold_lt": "#ffe9a3"
+  },
+  "assets": {
+    "hole": {
+      "file": "hole.png",
+      "w": 204,
+      "h": 120,
+      "anchorX": 102,
+      "anchorY": 60
+    },
+    "hole-front": {
+      "file": "hole-front.png",
+      "w": 204,
+      "h": 120,
+      "anchorX": 102,
+      "anchorY": 60
+    },
+    "hole-boarded": {
+      "file": "hole-boarded.png",
+      "w": 204,
+      "h": 120,
+      "anchorX": 102,
+      "anchorY": 60
+    },
+    "hammer": {
+      "file": "hammer.png",
+      "w": 162,
+      "h": 282,
+      "anchorX": 81,
+      "anchorY": 228
+    },
+    "grass": {
+      "file": "grass.png",
+      "w": 1281,
+      "h": 720,
+      "anchorX": 0,
+      "anchorY": 0
+    }
+  },
+  "moleSheet": {
+    "image": "mole-sheet.png",
+    "atlas": "mole-atlas.json",
+    "frames": 46
+  }
+}

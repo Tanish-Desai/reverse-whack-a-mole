@@ -1,3 +1,9 @@
+@font-face {
+  font-family: "AGoblinAppears";
+  src: url("../assets/fonts/a-goblin-appears-font/AGoblinAppears-o2aV.ttf") format("truetype");
+  font-display: block;
+}
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 html, body {
@@ -29,6 +35,10 @@ body {
 
 canvas#game {
   display: block;
+  /* the canvas is an integer multiple of the design resolution; keep
+     the browser's scale-to-fit nearest-neighbour so pixels stay hard */
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
   border-radius: 10px;
   background: #6fbf4a;
   outline: none;

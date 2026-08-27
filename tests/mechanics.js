@@ -345,11 +345,9 @@
        ' goldenLeft=' + G.golden.toFixed(2));
 
     G.clearWildcard();
-    G.forceWildcard('decoy');
-    ok('decoy mole appears', !!G.decoy && G.decoy.cell !== G.moleCell(), G.decoy && G.decoy.cell);
 
     G.clearWildcard();
-    var ids = ['lockdown', 'extralife', 'frenzy', 'decoy', 'golden'];
+    var ids = ['lockdown', 'extralife', 'frenzy', 'golden'];
     var pool = [];
     for (var w = 0; w < 400; w++) {
       G.clearWildcard();
