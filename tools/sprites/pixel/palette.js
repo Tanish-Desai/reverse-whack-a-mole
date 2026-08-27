@@ -46,10 +46,18 @@ var RAMPS = {
   grass_lt:  '#74cc55',
   grass_pl:  '#96e070',
 
-  /* metal — hammer bands */
+  /* metal — small hardware, pebbles */
   metal_dk:  '#4a4f5c',
   metal_md:  '#79808f',
   metal_lt:  '#a8b0be',
+
+  /* The hammer is deliberately cool and off-theme. Everything else on
+     screen is brown dirt or green grass, and a wooden mallet vanished
+     into the holes once several were on screen at once. */
+  steel_dk:  '#22304a',
+  steel_md:  '#3f6193',
+  steel_lt:  '#6a94c6',
+  steel_pl:  '#a9cbe8',
 
   /* gold variant */
   gold_dk:   '#c78a10',

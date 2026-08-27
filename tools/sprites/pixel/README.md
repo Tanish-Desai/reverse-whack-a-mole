@@ -43,7 +43,7 @@ transform, so every frame lands on whole pixels.
 | `raster.js` | indexed buffer, integer primitives, auto-outline |
 | `mole.js` | parametric mole, squash-aware |
 | `holes.js` | open hole, near-lip overlay, boarded hole |
-| `hammer.js` | hammer at rest |
+| `hammer.js` | hammer at rest, steel-blue so it never blends into the dirt |
 | `grass.js` | low-contrast field from value noise |
 | `clips.js` | animation clips, tuned for pixel art |
 | `scene.js` | game-scale composite preview |
@@ -60,6 +60,12 @@ silhouette, and clawed cream paws on the rim.
 Expressions are `normal`, `closed` (mid-burrow, and the game-over pancake)
 and `hurt` — squeezed eyes, angled brows, and a red lump with impact ticks
 sweeping around it. The `dazed` clip uses `hurt`.
+
+## The hammer is deliberately off-palette-family
+
+Everything else on screen is brown dirt or green grass. A wooden mallet
+matched the holes and the mole closely enough that a crowded arena became
+unreadable, so the hammer sits on its own cool steel ramp (`steel_*`).
 
 ## Two things worth knowing
 

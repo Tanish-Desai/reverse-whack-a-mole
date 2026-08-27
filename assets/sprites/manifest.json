@@ -26,6 +26,10 @@
     "metal_dk": "#4a4f5c",
     "metal_md": "#79808f",
     "metal_lt": "#a8b0be",
+    "steel_dk": "#22304a",
+    "steel_md": "#3f6193",
+    "steel_lt": "#6a94c6",
+    "steel_pl": "#a9cbe8",
     "gold_dk": "#c78a10",
     "gold_md": "#ffc93c",
     "gold_lt": "#ffe9a3"

@@ -137,10 +137,16 @@ function circle(x, y, r) {
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
 }
+/* The pixel face renders noticeably larger than the sans-serif the sizes
+   throughout were tuned against, so every call is scaled down once here
+   rather than by editing a hundred literals. measure() runs through the
+   same path, so panels and centring follow automatically. */
+var FONT_SCALE = 0.74;
+
 function setFont(size) {
   /* No weight: the pixel face ships a single weight, and asking for 900
      makes the browser synthesise a bold that smears the pixel grid. */
-  ctx.font = Math.round(size) + 'px ' + FONT;
+  ctx.font = Math.max(1, Math.round(size * FONT_SCALE)) + 'px ' + FONT;
 }
 function text(str, x, y, size, fill, opts) {
   opts = opts || {};
@@ -398,6 +404,11 @@ function moleVulnerable() {
 
 function spawnParticle(p) { if (particles.length < 460) particles.push(p); }
 
+/* Dust is atmosphere, not information. At full opacity a bonk's puff
+   completely buried the mole for half a second, which is the one moment
+   the player most needs to see where it is. */
+var DUST_ALPHA = 0.3;
+
 function dustPuff(x, y, n, opts) {
   opts = opts || {};
   var spread = opts.spread || 1;
@@ -408,7 +419,8 @@ function dustPuff(x, y, n, opts) {
       type: 'dust', x: x + rnd(-14, 14), y: y + rnd(-6, 6),
       vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.45 - rnd(20, 90) * spread,
       life: 0, max: rnd(0.35, 0.75), size: rnd(6, 17) * (opts.size || 1),
-      grav: 210, color: opts.color || (Math.random() < 0.5 ? '#a9784b' : '#7d5836')
+      grav: 210, alpha: opts.alpha === undefined ? DUST_ALPHA : opts.alpha,
+      color: opts.color || (Math.random() < 0.5 ? '#a9784b' : '#7d5836')
     });
   }
 }
@@ -735,7 +747,10 @@ function updateMole(dt) {
 function cellFree(i) {
   if (blocked[i] > 0) return false;
   for (var h = 0; h < hammers.length; h++) {
-    if (hammers[h].cell === i && hammers[h].phase !== 'recover') return false;
+    /* Any hammer on the cell holds it, recovering ones included. Letting a
+       new hammer target a hole that still had one lifting off it meant a
+       player could be struck by a strike they had no clean frame to read. */
+    if (hammers[h].cell === i) return false;
   }
   return true;
 }
@@ -1846,7 +1861,8 @@ function drawUndergroundTell() {
     spawnParticle({
       type: 'dust', x: p.x + rnd(-20, 20), y: p.y + 2,
       vx: rnd(-14, 14), vy: rnd(-40, -14),
-      life: 0, max: 0.5, size: rnd(3, 7), grav: 120, color: '#7d5836'
+      life: 0, max: 0.5, size: rnd(3, 7), grav: 120,
+      alpha: DUST_ALPHA, color: '#7d5836'
     });
   }
 }
@@ -1922,7 +1938,7 @@ function drawParticles() {
     var p = particles[i];
     var k = p.life / p.max;
     ctx.save();
-    ctx.globalAlpha = 1 - k * k;
+    ctx.globalAlpha = (1 - k * k) * (p.alpha === undefined ? 1 : p.alpha);
     if (p.type === 'dust') {
       ctx.fillStyle = p.color;
       circle(p.x, p.y, p.size * (1 - k * 0.45)); ctx.fill();
