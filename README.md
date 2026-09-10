@@ -44,6 +44,7 @@ js/game.js        game loop, state machine, rendering
 js/audio.js       synthesised SFX + chiptune loop (WebAudio, no asset files)
 js/storage.js     localStorage leaderboard + preferences
 js/leaderboard.js the shared board, with the local one as fallback
+admin/            the leaderboard admin page
 netlify/          the scores function + its ranking rules
 tests/            browser-driven test suites
 ```
@@ -88,6 +89,40 @@ prompt.
 Nothing needs configuring: Blobs is provisioned automatically for a deployed
 site, and there is no key to set, no account to make and no free-tier signup
 beyond Netlify itself.
+
+### Admin
+
+`/admin` lists the whole board, deletes a single score, wipes the lot, and
+saves a JSON copy first. It is the same `/api/scores` the game talks to, with
+`DELETE ?id=<id>` and `DELETE ?all=1` added.
+
+Those two are the only things here that need a credential. Set an `ADMIN_TOKEN`
+environment variable on the site (Site configuration → Environment variables),
+and the page asks for it and sends it back as an `x-admin-token` header. The
+token is held in `sessionStorage`, so it dies with the tab.
+
+With no `ADMIN_TOKEN` set, both deletes are refused outright — a site that
+never configures one has no delete path at all, which is the right default for
+a variable someone has to remember to add. Tokens are compared in constant
+time, and wrong ones are rate limited on their own per-IP budget: sharing the
+submitters' bucket would let someone guessing tokens lock every player behind
+the same NAT out of filing a score.
+
+The page itself is public, because everything it can do is behind the token.
+It carries `noindex` so it stays out of search results, but treat the URL as
+known and the token as the actual lock.
+
+To wipe the board without the page — or to clear a rate limit you tripped
+while testing — the Netlify CLI reaches the store directly:
+
+```bash
+netlify blobs:list unhammered
+netlify blobs:get unhammered leaderboard/v1
+netlify blobs:delete unhammered leaderboard/v1
+```
+
+A missing key reads back as an empty board, so deleting it is the whole reset;
+the next score submitted recreates it.
 
 ### On trusting the client
 

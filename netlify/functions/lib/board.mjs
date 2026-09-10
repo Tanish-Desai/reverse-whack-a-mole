@@ -77,3 +77,12 @@ export function place(entries, entry) {
   const next = (Array.isArray(entries) ? entries : []).concat([entry]).sort(byRank).slice(0, KEEP);
   return { entries: next, rank: next.findIndex((e) => e.id === entry.id) };
 }
+
+/* Drops one row by id. `removed` is false when nothing matched, which the
+   admin endpoint reports as a 404 rather than a silent success — deleting
+   a row someone else already deleted should say so. */
+export function removeById(entries, id) {
+  const before = Array.isArray(entries) ? entries : [];
+  const next = before.filter((e) => e && e.id !== id);
+  return { entries: next, removed: next.length !== before.length };
+}

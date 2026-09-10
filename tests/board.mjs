@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   DEFAULT_TEAM, KEEP, PLAYER_MAX, TEAM_MAX,
-  byRank, cleanName, place, toEntry, validate
+  byRank, cleanName, place, removeById, toEntry, validate
 } from '../netlify/functions/lib/board.mjs';
 
 const run = (over = {}) => ({ team: 'REDS', player: 'SAM', score: 500, time: 30, ...over });
@@ -93,4 +93,30 @@ test('the board is trimmed, and a run that misses the cut reports rank -1', () =
 test('a missing or corrupt stored board is treated as empty', () => {
   assert.equal(place(undefined, { id: 'n', score: 5, time: 1, date: 1 }).rank, 0);
   assert.equal(place(null, { id: 'n', score: 5, time: 1, date: 1 }).entries.length, 1);
+});
+
+test('removeById drops the matching row and leaves the rest in order', () => {
+  const board = [
+    { id: 'a', score: 900, time: 50, date: 1 },
+    { id: 'b', score: 500, time: 20, date: 2 },
+    { id: 'c', score: 100, time: 5, date: 3 }
+  ];
+  const cut = removeById(board, 'b');
+  assert.equal(cut.removed, true);
+  assert.deepEqual(cut.entries.map((e) => e.id), ['a', 'c']);
+  /* The input is left alone — the caller may still need it for a retry. */
+  assert.equal(board.length, 3);
+});
+
+test('removeById reports a miss rather than silently succeeding', () => {
+  const board = [{ id: 'a', score: 900, time: 50, date: 1 }];
+  assert.equal(removeById(board, 'nope').removed, false);
+  assert.equal(removeById([], 'a').removed, false);
+  assert.equal(removeById(undefined, 'a').removed, false);
+});
+
+test('removeById survives a corrupt row in the stored board', () => {
+  const cut = removeById([null, { id: 'a', score: 1, time: 1, date: 1 }], 'a');
+  assert.equal(cut.removed, true);
+  assert.deepEqual(cut.entries, []);
 });

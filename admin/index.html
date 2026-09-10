@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Nothing here is secret, but there is no reason for it to be findable. -->
+<meta name="robots" content="noindex, nofollow">
+<title>UNHAMMERED — leaderboard admin</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #14100a;
+    --panel: #1e1810;
+    --line: #3a2f1e;
+    --ink: #efe6d5;
+    --dim: #a2957c;
+    --accent: #ffd23f;
+    --danger: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 28px 20px 60px;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 21px; margin: 0 0 4px; color: var(--accent); }
+  h2 { font-size: 15px; margin: 0 0 12px; }
+  .sub { color: var(--dim); margin: 0 0 24px; font-size: 13px; }
+
+  section {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 18px;
+    margin-bottom: 20px;
+  }
+  section.danger { border-color: #5c2b2b; }
+
+  label { display: block; font-size: 13px; color: var(--dim); margin-bottom: 6px; }
+  input[type="password"], input[type="text"] {
+    width: 100%;
+    padding: 9px 11px;
+    background: #0f0c07;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    color: var(--ink);
+    font: inherit;
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+  .row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+  .row > div { flex: 1 1 240px; }
+
+  button {
+    padding: 9px 16px;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: #2b2317;
+    color: var(--ink);
+    font: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  button:hover:not(:disabled) { background: #3a2f1e; }
+  button:disabled { opacity: 0.45; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #241a04; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: #ffdd6b; }
+  button.danger { border-color: #5c2b2b; color: var(--danger); }
+  button.danger:hover:not(:disabled) { background: #2e1616; }
+  button.small { padding: 4px 10px; font-size: 13px; }
+
+  /* A narrow screen scrolls the table, not the page. */
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--dim); font-weight: 600; }
+  td.num, th.num { text-align: right; }
+  tbody tr:hover { background: #241d13; }
+  .team { color: var(--dim); font-size: 13px; }
+  .empty { color: var(--dim); padding: 22px 0; text-align: center; }
+
+  #status { margin: 0 0 20px; padding: 10px 13px; border-radius: 5px; font-size: 14px; }
+  #status.ok { background: #1d2a18; color: #b7e0a1; }
+  #status.err { background: #2e1616; color: #ffb3b3; }
+  #status.busy { background: #241d13; color: var(--dim); }
+  #status[hidden] { display: none; }
+
+  code { background: #0f0c07; padding: 1px 5px; border-radius: 3px; font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>UNHAMMERED — leaderboard admin</h1>
+  <p class="sub">
+    Reads and edits the shared board at <code>/api/scores</code>. The token is
+    the site's <code>ADMIN_TOKEN</code>; it is kept for this tab only and is
+    never written to disk.
+  </p>
+
+  <p id="status" hidden></p>
+
+  <section>
+    <div class="row">
+      <div>
+        <label for="token">Admin token</label>
+        <input id="token" type="password" autocomplete="current-password" placeholder="ADMIN_TOKEN">
+      </div>
+      <button id="load" class="primary">Load scores</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Scores <span id="count" class="sub" style="margin:0"></span></h2>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th class="num">#</th>
+            <th>Player</th>
+            <th class="num">Score</th>
+            <th class="num">Survived</th>
+            <th>Recorded</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <p id="empty" class="empty">Load the board to see scores.</p>
+  </section>
+
+  <section class="danger">
+    <h2>Delete everything</h2>
+    <p class="sub" style="margin-bottom:12px">
+      Wipes the whole board in one go. There is no undo and no backup — take a
+      copy first if the scores matter.
+    </p>
+    <div class="row">
+      <div>
+        <label for="confirm">Type <code>DELETE</code> to confirm</label>
+        <input id="confirm" type="text" autocomplete="off" placeholder="DELETE">
+      </div>
+      <button id="wipe" class="danger" disabled>Delete all scores</button>
+      <button id="download">Download JSON</button>
+    </div>
+  </section>
+</main>
+
+<script>
+'use strict';
+
+var ENDPOINT = '/api/scores';
+var TOKEN_KEY = 'unhammered.adminToken';
+
+var els = {
+  token: document.getElementById('token'),
+  load: document.getElementById('load'),
+  rows: document.getElementById('rows'),
+  empty: document.getElementById('empty'),
+  count: document.getElementById('count'),
+  status: document.getElementById('status'),
+  confirm: document.getElementById('confirm'),
+  wipe: document.getElementById('wipe'),
+  download: document.getElementById('download')
+};
+
+var board = [];
+
+/* sessionStorage rather than localStorage: the token dies with the tab.
+   Both can throw outright in a locked-down browser, so neither is trusted. */
+try {
+  var saved = sessionStorage.getItem(TOKEN_KEY);
+  if (saved) els.token.value = saved;
+} catch (e) { /* no storage — the field just starts empty */ }
+
+function rememberToken() {
+  try { sessionStorage.setItem(TOKEN_KEY, els.token.value); } catch (e) {}
+}
+
+function say(message, kind) {
+  els.status.textContent = message;
+  els.status.className = kind || '';
+  els.status.hidden = false;
+}
+
+function busy(on) {
+  els.load.disabled = on;
+  els.download.disabled = on;
+  els.wipe.disabled = on || els.confirm.value.trim() !== 'DELETE';
+  var buttons = els.rows.querySelectorAll('button');
+  for (var i = 0; i < buttons.length; i++) buttons[i].disabled = on;
+}
+
+/* Every response is JSON, including the errors, so failures carry the
+   function's own wording rather than a bare status code. */
+function call(method, query) {
+  var options = { method: method, headers: {} };
+  if (method !== 'GET') options.headers['x-admin-token'] = els.token.value;
+
+  return fetch(ENDPOINT + query, options).then(function (res) {
+    return res.json().catch(function () {
+      return { error: 'the server sent a non-JSON response (HTTP ' + res.status + ')' };
+    }).then(function (body) {
+      if (!res.ok) throw new Error(body.error || 'HTTP ' + res.status);
+      return body;
+    });
+  });
+}
+
+function fmtDate(ms) {
+  if (!ms) return '—';
+  var d = new Date(ms);
+  return isNaN(d.getTime()) ? '—' : d.toLocaleString();
+}
+
+function render() {
+  els.rows.textContent = '';
+  els.empty.hidden = board.length > 0;
+  els.count.textContent = board.length ? '(' + board.length + ')' : '';
+  if (!board.length) {
+    els.empty.textContent = 'No scores on the board.';
+    return;
+  }
+
+  board.forEach(function (entry, i) {
+    var tr = document.createElement('tr');
+
+    /* Built as text nodes, never innerHTML: these names come from whoever
+       played, and the server strips markup characters but this page should
+       not be relying on that. */
+    function cell(value, className) {
+      var td = document.createElement('td');
+      if (className) td.className = className;
+      td.textContent = value;
+      tr.appendChild(td);
+      return td;
+    }
+
+    cell(String(i + 1), 'num');
+
+    var who = cell('');
+    who.appendChild(document.createTextNode(entry.player || '—'));
+    who.appendChild(document.createElement('br'));
+    var team = document.createElement('span');
+    team.className = 'team';
+    team.textContent = entry.team || '';
+    who.appendChild(team);
+
+    cell(String(entry.score), 'num');
+    cell((entry.time || 0).toFixed(1) + 's', 'num');
+    cell(fmtDate(entry.date));
+
+    var actions = cell('', 'num');
+    var button = document.createElement('button');
+    button.className = 'danger small';
+    button.textContent = 'Delete';
+    button.onclick = function () { removeOne(entry); };
+    actions.appendChild(button);
+
+    els.rows.appendChild(tr);
+  });
+}
+
+function loadScores() {
+  rememberToken();
+  busy(true);
+  say('Loading…', 'busy');
+  /* The board only ever keeps 100, so one request is the whole thing. */
+  call('GET', '?limit=100').then(function (payload) {
+    board = payload.entries || [];
+    render();
+    say('Loaded ' + board.length + ' score' + (board.length === 1 ? '' : 's') + '.', 'ok');
+  }).catch(function (err) {
+    say('Could not load the board: ' + err.message, 'err');
+  }).then(function () { busy(false); });
+}
+
+function removeOne(entry) {
+  if (!window.confirm('Delete ' + (entry.player || 'this score') + '’s score of ' + entry.score + '?')) return;
+  rememberToken();
+  busy(true);
+  say('Deleting…', 'busy');
+  call('DELETE', '?id=' + encodeURIComponent(entry.id)).then(function (payload) {
+    board = payload.entries || [];
+    render();
+    say('Deleted ' + (entry.player || 'that score') + '. ' + board.length + ' left.', 'ok');
+  }).catch(function (err) {
+    say('Could not delete that score: ' + err.message, 'err');
+  }).then(function () { busy(false); });
+}
+
+function wipe() {
+  if (!window.confirm('Delete all ' + board.length + ' scores? This cannot be undone.')) return;
+  rememberToken();
+  busy(true);
+  say('Deleting everything…', 'busy');
+  call('DELETE', '?all=1').then(function (payload) {
+    board = [];
+    render();
+    els.confirm.value = '';
+    say('Deleted ' + payload.removed + ' score' + (payload.removed === 1 ? '' : 's') + '. The board is empty.', 'ok');
+  }).catch(function (err) {
+    say('Could not wipe the board: ' + err.message, 'err');
+  }).then(function () { busy(false); });
+}
+
+/* A local download rather than a server export — the board is already in
+   memory, and a copy before a wipe is the whole point. */
+function download() {
+  if (!board.length) { say('Load the board first — there is nothing to save.', 'err'); return; }
+  var blob = new Blob([JSON.stringify(board, null, 2)], { type: 'application/json' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'unhammered-leaderboard-' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  say('Saved a copy of ' + board.length + ' scores.', 'ok');
+}
+
+els.load.onclick = loadScores;
+els.wipe.onclick = wipe;
+els.download.onclick = download;
+els.confirm.oninput = function () {
+  els.wipe.disabled = els.confirm.value.trim() !== 'DELETE';
+};
+els.token.onkeydown = function (e) { if (e.key === 'Enter') loadScores(); };
+
+/* A token carried over from earlier in the session means the board can be
+   on screen before anyone clicks anything. */
+if (els.token.value) loadScores();
+</script>
+</body>
+</html>
