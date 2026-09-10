@@ -4,4 +4,9 @@ build/
 # Local Netlify folder
 .netlify
 
+# Secrets for `netlify dev`. Never commit this — the deployed site reads
+# ADMIN_TOKEN from Netlify's own environment variables, not from the repo.
+.env
+.env.*
+!.env.example
 admin_token.txt
