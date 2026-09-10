@@ -16,6 +16,13 @@ Or serve it (useful for the test suite, which fetches from `/tests/`):
 python3 -m http.server 8123
 ```
 
+The global leaderboard needs the Netlify function behind it, so to work on
+that, serve the site with the Netlify CLI instead:
+
+```bash
+netlify dev
+```
+
 ## Controls
 
 | Input | Action |
@@ -36,6 +43,8 @@ css/style.css     letterboxed full-screen layout
 js/game.js        game loop, state machine, rendering
 js/audio.js       synthesised SFX + chiptune loop (WebAudio, no asset files)
 js/storage.js     localStorage leaderboard + preferences
+js/leaderboard.js the shared board, with the local one as fallback
+netlify/          the scores function + its ranking rules
 tests/            browser-driven test suites
 ```
 
@@ -53,8 +62,51 @@ lengths, or the accepted characters via `DEFAULT_TEAM`, `TEAM_MAX`,
 Boards written by earlier builds still show: an entry that only has `initials`
 is displayed under `FREE AGENTS` rather than being dropped.
 
-The board itself lives in `localStorage`, so every browser has its own top ten
-and there is no server, no account and no setup.
+## The leaderboard
+
+There are two boards and the game uses both.
+
+The **global board** lives in [Netlify Blobs](https://docs.netlify.com/blobs/overview/)
+and is served by `netlify/functions/scores.mjs` at `/api/scores`. Blobs is a
+key-value store rather than a database, so the whole board is one JSON array
+under one key, sorted on write and trimmed to the top 100 — at leaderboard
+scale that is cheaper than any real query, and it makes ranking a single read.
+Two players finishing at the same moment would otherwise overwrite each other,
+so writes are conditional on the ETag of the copy that was read and retried on
+conflict.
+
+The **local board** is the same `localStorage` top ten as before. It is not a
+cache — it is the fallback. Every run is written there first and synchronously,
+so the function being down, a dead network, or opening `index.html` straight
+off disk costs the global list and nothing else. The game-over panel always
+says which board it is showing and which one a run was filed on.
+
+A run is offered the name prompt if it would land on *either* board, since the
+global one fills up with strangers and a personal best still deserves the
+prompt.
+
+Nothing needs configuring: Blobs is provisioned automatically for a deployed
+site, and there is no key to set, no account to make and no free-tier signup
+beyond Netlify itself.
+
+### On trusting the client
+
+The game is client-side, so the POST body is a claim, not evidence — anyone
+can open devtools and file whatever they like. The function does what is
+proportionate for a hobby game rather than pretending to solve it:
+
+- names are re-sanitised server-side against the same character set the game
+  accepts, and re-truncated to the same lengths;
+- a score is rejected if it could not have been earned in the submitted time
+  (a loose ceiling of 1000 + 2000/sec, well above what the scoring rates can
+  actually produce);
+- writes are capped at 12 per minute per IP, which is more than a machine a
+  team is taking turns on will ever need.
+
+Beating that means forging a plausible score at a plausible rate, which is a
+different level of effort from editing a number. Closing it properly would
+mean submitting the run for server-side replay; the rules live in
+`netlify/functions/lib/board.mjs` if that ever becomes worth doing.
 
 ## What's implemented
 
@@ -63,7 +115,8 @@ Everything in the spec's Must-Have, Should-Have and Nice-to-Have lists:
 telegraph/strike/recovery, all seven targeting patterns, lives and damage,
 passive + close-call + combo + milestone scoring, the continuous difficulty
 ramp, five wildcards, title / tutorial / pause / game-over screens,
-a top-10 localStorage leaderboard with team + player name entry, particles,
+a leaderboard with team + player name entry — shared across everyone who
+plays, with the original localStorage top ten as the fallback — particles,
 screen shake, and synthesised audio.
 
 ## Feel notes
@@ -150,3 +203,10 @@ measure wall-clock time against a simulation that isn't running at 1x.
 
 `window.__game` exposes state getters and helpers (`forceWildcard`,
 `setElapsed`, `spawnHammerAt`, ...) used by the suites.
+
+The leaderboard's ranking and validation rules are pure, so they are tested in
+Node rather than the browser:
+
+```bash
+node tests/board.mjs
+```

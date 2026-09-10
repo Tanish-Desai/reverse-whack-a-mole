@@ -1,0 +1,8 @@
+# The game is plain static files at the repo root — there is nothing to
+# compile, so there is no build command. Only the scores function is built.
+[build]
+  publish = "."
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"

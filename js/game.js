@@ -329,6 +329,10 @@ var frenzy, golden;
 var shakeMag, shakeTime, shakeDur, flashRed, edgeFlash, dimAmount;
 var stats, firstPlayHintTimer;
 var gameOverT, gameOverPhase, countUp, teamName, playerName, nameField, myRank;
+/* Whether myRank is a place on the shared board or just this browser's, and
+   whether a run was filed at all — a rank of -1 means "off the board", which
+   is a different thing from a run that never qualified for a name. */
+var myRankGlobal = false, scoreFiled = false;
 var firstSession = false;   /* set at boot — drives the one-time controls hint */
 
 /* ---- slow motion ----
@@ -1130,6 +1134,7 @@ function goTitle() {
   resetRun();
   elapsed = 8;               /* attract mode runs at a lively-but-fair pace */
   highScore = Store.highScore();
+  Board.refresh();
   Sound.startMusic();
 }
 
@@ -1169,6 +1174,11 @@ function triggerGameOver() {
   gameOverT = 0;
   countUp = 0;
   myRank = -1;
+  myRankGlobal = false;
+  scoreFiled = false;
+  /* The panel is about to be drawn, so pull the shared board now rather
+     than showing a stale one behind the name prompt. */
+  Board.refresh();
   /* Teams play in blocks, so last run's names are the best first guess.
      Focus starts on whichever field is not already answered. */
   var last = Store.lastNames();
@@ -1196,10 +1206,20 @@ function submitName() {
   Store.setLastNames(team, player);
 
   var entry = { team: team, player: player, score: score, time: Math.round(elapsed * 10) / 10, date: Date.now() };
-  myRank = Store.submit(entry);
-  highScore = Store.highScore();
-  gameOverPhase = 'done';
+  /* The local board is written synchronously inside Board.submit, so
+     `highScore` is already correct — only the shared rank has to wait. */
+  gameOverPhase = 'saving';
   Sound.select();
+  Board.submit(entry, function (rank, global) {
+    /* A retry can start before a slow POST returns; don't yank the player
+       back to a screen they have already left. */
+    if (state !== S.GAME_OVER || gameOverPhase !== 'saving') return;
+    myRank = rank;
+    myRankGlobal = global;
+    scoreFiled = true;
+    gameOverPhase = 'done';
+  });
+  highScore = Store.highScore();
 }
 
 /* ---- attract-mode AI ---- */
@@ -1311,7 +1331,7 @@ function update(dt) {
       displayScore = score * easeOutCubic(countUp);
       if (countUp >= 1) {
         displayScore = score;
-        gameOverPhase = Store.qualifies(score) ? 'name' : 'done';
+        gameOverPhase = Board.qualifies(score) ? 'name' : 'done';
       }
     }
     if (newHigh && confetti.length < 40 && gameOverT < 4) popConfetti(3);
@@ -1489,7 +1509,7 @@ function onKeyDown(e) {
       if (code === 'Space' || code === 'Enter') {
         countUp = 1;
         displayScore = score;
-        gameOverPhase = Store.qualifies(score) ? 'name' : 'done';
+        gameOverPhase = Board.qualifies(score) ? 'name' : 'done';
       }
       return;
     }
@@ -1509,6 +1529,12 @@ function onKeyDown(e) {
       }
       var ch = code === 'Space' ? ' ' : (e.key && e.key.length === 1 ? e.key : '');
       if (ch && NAME_CHAR.test(ch)) { typeName(ch); return; }
+      return;
+    }
+    if (gameOverPhase === 'saving') {
+      /* Escape still works — a wedged network shouldn't trap anyone on
+         the game-over screen. */
+      if (code === 'Escape') { goTitle(); return; }
       return;
     }
     /* done */
@@ -2582,21 +2608,36 @@ function drawPause() {
 
 function drawLeaderboard(x, y, w, h) {
   panel(x, y, w, h, 20, 'rgba(18,10,4,0.86)', 'rgba(255,210,63,0.55)', 4);
-  text('LEADERBOARD', x + w / 2, y + 34, 26, '#ffd23f', { outline: 5 });
 
-  var rows = Store.board();
+  var online = Board.isGlobal();
+  text(online ? 'GLOBAL TOP 10' : 'LEADERBOARD', x + w / 2, y + 34, 26, '#ffd23f', { outline: 5 });
+
+  /* The source of the rows is never left ambiguous: a player who beats the
+     board deserves to know whether anyone else will see it. */
+  var st = Board.status();
+  var note = online
+    ? (st === 'offline' ? 'offline — last known board' : 'everyone who has played')
+    : (st === 'loading' || st === 'saving' ? 'connecting…' : 'this browser only');
+  ctx.save();
+  ctx.globalAlpha = 0.75;
+  text(note, x + w / 2, y + 58, 13, online && st !== 'offline' ? '#9fb894' : '#c9a86a',
+       { outline: 2 });
+  ctx.restore();
+
+  var rows = Board.rows();
   if (!rows.length) {
-    text('no scores yet', x + w / 2, y + h / 2, 20, '#9c9c9c', { outline: 3 });
+    text(st === 'loading' ? 'loading…' : 'no scores yet',
+         x + w / 2, y + h / 2, 20, '#9c9c9c', { outline: 3 });
     return;
   }
   /* A row is two lines — player over team — so names stay readable at the
      width the panel has. */
-  var top = y + 70, step = 36;
+  var top = y + 84, step = 36;
   var nameX = x + 62, nameW = w - 62 - 88;
   for (var i = 0; i < rows.length; i++) {
     var e = rows[i];
     var yy = top + i * step;
-    var mine = (i === myRank);
+    var mine = (scoreFiled && i === myRank && myRankGlobal === Board.isGlobal());
     if (mine) {
       ctx.save();
       ctx.globalAlpha = 0.24 + 0.12 * Math.sin(T * 7);
@@ -2699,11 +2740,27 @@ function drawGameOver() {
     drawNameField('PLAYER', playerName, 'YOUR NAME', lx + 30, ly + 374, lw - 60, 1);
     text('TAB switch   ENTER to save', lx + lw / 2, ly + 434, 16,
          '#cfe6c0', { outline: 3 });
+  } else if (gameOverPhase === 'saving') {
+    ctx.save();
+    ctx.globalAlpha = 0.6 + 0.4 * Math.sin(T * 5);
+    text('SAVING SCORE…', lx + lw / 2, iy + 14, 22, '#9fe8ff', { outline: 4 });
+    ctx.restore();
+    text('ESC for title screen', lx + lw / 2, iy + 82, 16, '#cfe6c0', { outline: 3 });
   } else if (gameOverPhase === 'done') {
-    if (myRank >= 0) {
-      var rankLine = 'SAVED AS  ' + playerName + '  ·  RANK #' + (myRank + 1);
-      text(ellipsise(rankLine, 22, lw - 40), lx + lw / 2, iy - 30, 22, '#9fe8ff', { outline: 4 });
-      text(teamName, lx + lw / 2, iy - 4, 17, '#9fb894', { outline: 3 });
+    if (scoreFiled) {
+      /* Who it was saved as goes on its own line — a name and a team and a
+         rank on one line is what pushed this into the ellipsis. */
+      var headline = myRank < 0
+        ? 'NOT IN THE TOP 100'
+        : (myRankGlobal ? 'GLOBAL RANK #' : 'LOCAL RANK #') + (myRank + 1);
+      text(headline, lx + lw / 2, iy - 32, 22, myRank < 0 ? '#9fb894' : '#9fe8ff',
+           { outline: 4 });
+      text(ellipsise(playerName + '  ·  ' + teamName, 17, lw - 40),
+           lx + lw / 2, iy - 8, 17, '#9fb894', { outline: 3 });
+      if (!myRankGlobal) {
+        text('saved on this browser only', lx + lw / 2, iy + 12, 13, '#c9a86a',
+             { outline: 2 });
+      }
     }
     ctx.save();
     ctx.globalAlpha = 0.65 + 0.35 * Math.sin(T * 4.5);
