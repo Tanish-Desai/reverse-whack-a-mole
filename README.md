@@ -23,7 +23,8 @@ python3 -m http.server 8123
 | Arrow keys / WASD | Move one hole (one press, one step) |
 | Space | Burrow / surface, and confirm on menus |
 | Up / Down | Choose a title menu item |
-| Enter | Confirm (menus, initials) |
+| Enter | Confirm (menus); next field / save on name entry |
+| Tab | Switch between the team and player fields |
 | Esc | Pause |
 | M | Mute |
 
@@ -38,6 +39,23 @@ js/storage.js     localStorage leaderboard + preferences
 tests/            browser-driven test suites
 ```
 
+## Who played
+
+A qualifying run is filed under a **team** and a **player name**, both free
+text, rather than three arcade letters — three characters cannot tell two
+players apart. The team field is pre-filled with `FREE AGENTS` so a quick test
+run saves without typing, the player name is required, and both are remembered
+for the next run because a team usually takes turns on one machine. Tab (or the
+up/down arrows) switches fields, Enter saves. Change the default, the field
+lengths, or the accepted characters via `DEFAULT_TEAM`, `TEAM_MAX`,
+`PLAYER_MAX` and `NAME_CHAR` at the top of `js/game.js`.
+
+Boards written by earlier builds still show: an entry that only has `initials`
+is displayed under `FREE AGENTS` rather than being dropped.
+
+The board itself lives in `localStorage`, so every browser has its own top ten
+and there is no server, no account and no setup.
+
 ## What's implemented
 
 Everything in the spec's Must-Have, Should-Have and Nice-to-Have lists:
@@ -45,7 +63,7 @@ Everything in the spec's Must-Have, Should-Have and Nice-to-Have lists:
 telegraph/strike/recovery, all seven targeting patterns, lives and damage,
 passive + close-call + combo + milestone scoring, the continuous difficulty
 ramp, five wildcards, title / tutorial / pause / game-over screens,
-a top-10 localStorage leaderboard with arcade initials entry, particles,
+a top-10 localStorage leaderboard with team + player name entry, particles,
 screen shake, and synthesised audio.
 
 ## Feel notes

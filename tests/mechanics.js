@@ -416,6 +416,8 @@
     }
 
     /* ---- game over + leaderboard ---- */
+    /* start from an empty board so the run under test is rank 1 */
+    G.clearStorage();
     G.clearWildcard();
     G.clearHammers();
     G.setLives(1);
@@ -425,12 +427,20 @@
     await wait(1400);
     press('Space');                                     /* skip count-up */
     await wait(120);
-    ok('qualifying score opens initials entry', G.state === 'GAME_OVER', G.state);
-    press('KeyZ', 'z'); press('KeyO', 'o'); press('KeyE', 'e');   /* type initials */
+    ok('qualifying score opens name entry', G.state === 'GAME_OVER', G.state);
+    /* the team field carries a default, so clear it before typing over it */
+    G.focusName(0);
+    press('Delete');
+    press('KeyM', 'm'); press('KeyO', 'o'); press('KeyL', 'l'); press('KeyE', 'e');
+    press('Space', ' '); press('KeyF', 'f'); press('KeyC', 'c');
+    press('Tab');
+    ok('tab moves to the player field', G.nameField === 1, G.nameField);
+    press('KeyZ', 'z'); press('KeyO', 'o'); press('KeyE', 'e');
     press('Enter');
     await wait(150);
     var board = JSON.parse(localStorage.getItem('unhammered.leaderboard.v1') || '[]');
-    ok('typed initials are recorded', board.length > 0 && board[0].initials === 'ZOE',
+    ok('typed team and player names are recorded',
+       board.length > 0 && board[0].player === 'ZOE' && board[0].team === 'MOLE FC',
        JSON.stringify(board[0] || null));
     press('Space');
     await wait(120);

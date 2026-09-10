@@ -50,7 +50,14 @@ var WILDCARDS = [
   { id: 'golden',    weight: 15, dur: 4, name: 'GOLDEN MOLE',   blurb: '5x points. Untouchable.',  color: '#ffd23f', icon: 'star'  }
 ];
 
-var CHARSET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-';
+/* ---- name entry ----
+   Runs are filed under a team and a player rather than three arcade
+   letters, because a board of "AAA" tells you nothing about who played.
+   The team carries a default so a quick test run still saves cleanly. */
+var DEFAULT_TEAM = 'FREE AGENTS';
+var TEAM_MAX = 18;
+var PLAYER_MAX = 14;
+var NAME_CHAR = /[A-Za-z0-9 .'_-]/;
 
 /* ------------------------------------------------------------
    2. Utilities
@@ -321,7 +328,7 @@ var pauseIndex = 0;
 var frenzy, golden;
 var shakeMag, shakeTime, shakeDur, flashRed, edgeFlash, dimAmount;
 var stats, firstPlayHintTimer;
-var gameOverT, gameOverPhase, countUp, initials, initialSlot, myRank;
+var gameOverT, gameOverPhase, countUp, teamName, playerName, nameField, myRank;
 var firstSession = false;   /* set at boot — drives the one-time controls hint */
 
 /* ---- slow motion ----
@@ -1162,8 +1169,12 @@ function triggerGameOver() {
   gameOverT = 0;
   countUp = 0;
   myRank = -1;
-  initials = 'AAA';
-  initialSlot = 0;
+  /* Teams play in blocks, so last run's names are the best first guess.
+     Focus starts on whichever field is not already answered. */
+  var last = Store.lastNames();
+  teamName = last.team || DEFAULT_TEAM;
+  playerName = last.player || '';
+  nameField = last.team ? 1 : 0;
   mole.squished = 9999;
   Sound.stopMusic(0.8);
   Sound.gameOver();
@@ -1176,8 +1187,15 @@ function triggerGameOver() {
   if (newHigh) { popConfetti(150); Sound.fanfare(); }
 }
 
-function submitInitials() {
-  var entry = { initials: initials, score: score, time: Math.round(elapsed * 10) / 10, date: Date.now() };
+function submitName() {
+  var player = cleanName(playerName, PLAYER_MAX);
+  if (!player) { nameField = 1; Sound.select(); return; }   /* the player name is the identity — insist on one */
+  var team = cleanName(teamName, TEAM_MAX) || DEFAULT_TEAM;
+  teamName = team;
+  playerName = player;
+  Store.setLastNames(team, player);
+
+  var entry = { team: team, player: player, score: score, time: Math.round(elapsed * 10) / 10, date: Date.now() };
   myRank = Store.submit(entry);
   highScore = Store.highScore();
   gameOverPhase = 'done';
@@ -1315,17 +1333,57 @@ var BLOCK_DEFAULT = {
   Space: 1, Enter: 1, Backspace: 1, Tab: 1
 };
 
-function nudgeInitial(delta) {
-  var i = CHARSET.indexOf(initials[initialSlot]);
-  if (i < 0) i = 0;
-  i = (i + delta + CHARSET.length) % CHARSET.length;
-  initials = initials.substring(0, initialSlot) + CHARSET[i] + initials.substring(initialSlot + 1);
+/* Names are free text, so they get tidied rather than constrained: caps for
+   the retro font, single spaces, no edges, and a hard length cap. */
+function cleanName(v, max) {
+  return String(v == null ? '' : v)
+    .toUpperCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, max);
+}
+
+function nameOf(entry) {
+  if (!entry) return '—';
+  return entry.player || entry.initials || '—';   /* pre-team boards stored initials */
+}
+
+function teamOf(entry) {
+  if (!entry) return '';
+  return entry.team || (entry.initials ? DEFAULT_TEAM : '');
+}
+
+function activeName() { return nameField === 0 ? teamName : playerName; }
+
+function setActiveName(v) {
+  if (nameField === 0) teamName = v; else playerName = v;
+}
+
+function focusField(i) {
+  if (i === nameField) return;
+  nameField = i;
   Sound.select();
 }
 
-function setInitial(ch) {
-  initials = initials.substring(0, initialSlot) + ch + initials.substring(initialSlot + 1);
-  initialSlot = Math.min(2, initialSlot + 1);
+function typeName(ch) {
+  var max = nameField === 0 ? TEAM_MAX : PLAYER_MAX;
+  var v = activeName();
+  if (v.length >= max) return;
+  if (ch === ' ' && (!v.length || v.charAt(v.length - 1) === ' ')) return;
+  setActiveName(v + ch.toUpperCase());
+  Sound.select();
+}
+
+function backspaceName() {
+  var v = activeName();
+  if (!v.length) return;
+  setActiveName(v.slice(0, -1));
+  Sound.select();
+}
+
+function clearName() {
+  if (!activeName().length) return;
+  setActiveName('');
   Sound.select();
 }
 
@@ -1351,7 +1409,11 @@ function onKeyDown(e) {
 
   Sound.unlock();
 
-  if (code === 'KeyM') {
+  /* While a name is being typed the keyboard belongs to the text field —
+     otherwise typing "MOLE" silently mutes the game. */
+  var typingName = (state === S.GAME_OVER && gameOverPhase === 'name');
+
+  if (code === 'KeyM' && !typingName) {
     var m = Sound.toggleMute();
     Store.setMuted(m);
     return;
@@ -1432,14 +1494,21 @@ function onKeyDown(e) {
       return;
     }
     if (gameOverPhase === 'name') {
-      if (code === 'ArrowUp' || code === 'KeyW') { nudgeInitial(1); return; }
-      if (code === 'ArrowDown' || code === 'KeyS') { nudgeInitial(-1); return; }
-      if (code === 'ArrowLeft' || code === 'KeyA') { initialSlot = Math.max(0, initialSlot - 1); Sound.select(); return; }
-      if (code === 'ArrowRight' || code === 'KeyD') { initialSlot = Math.min(2, initialSlot + 1); Sound.select(); return; }
-      if (code === 'Backspace') { initialSlot = Math.max(0, initialSlot - 1); Sound.select(); return; }
-      if (code === 'Enter') { submitInitials(); return; }
-      var ch = e.key ? e.key.toUpperCase() : '';
-      if (ch.length === 1 && CHARSET.indexOf(ch) >= 0) { setInitial(ch); return; }
+      /* Free text now, so letter keys type instead of steering. Only Tab and
+         the vertical arrows move between the two fields. */
+      if (code === 'Tab' || code === 'ArrowUp' || code === 'ArrowDown') {
+        focusField(1 - nameField);
+        return;
+      }
+      if (code === 'Backspace') { backspaceName(); return; }
+      if (code === 'Delete') { clearName(); return; }
+      if (code === 'Enter') {
+        if (nameField === 0) { focusField(1); return; }
+        submitName();
+        return;
+      }
+      var ch = code === 'Space' ? ' ' : (e.key && e.key.length === 1 ? e.key : '');
+      if (ch && NAME_CHAR.test(ch)) { typeName(ch); return; }
       return;
     }
     /* done */
@@ -2329,7 +2398,10 @@ function drawTitleScreen() {
   var hs = Store.highScore();
   if (hs > 0) {
     var b = Store.board()[0];
-    text('BEST  ' + hs + '  by ' + (b ? b.initials : '---'), VW / 2, 262, 24, '#9fe8ff', { outline: 5 });
+    var byLine = 'BEST  ' + hs + '  by ' + nameOf(b);
+    var byTeam = teamOf(b);
+    text(byLine, VW / 2, 262, 24, '#9fe8ff', { outline: 5 });
+    if (byTeam) text(byTeam, VW / 2, 288, 17, '#8fbfa0', { outline: 3 });
   }
 
   ctx.save();
@@ -2517,7 +2589,10 @@ function drawLeaderboard(x, y, w, h) {
     text('no scores yet', x + w / 2, y + h / 2, 20, '#9c9c9c', { outline: 3 });
     return;
   }
-  var top = y + 70, step = 33;
+  /* A row is two lines — player over team — so names stay readable at the
+     width the panel has. */
+  var top = y + 70, step = 36;
+  var nameX = x + 62, nameW = w - 62 - 88;
   for (var i = 0; i < rows.length; i++) {
     var e = rows[i];
     var yy = top + i * step;
@@ -2526,15 +2601,55 @@ function drawLeaderboard(x, y, w, h) {
       ctx.save();
       ctx.globalAlpha = 0.24 + 0.12 * Math.sin(T * 7);
       ctx.fillStyle = '#ffd23f';
-      ctx.beginPath(); ctx.roundRect(x + 10, yy - 14, w - 20, 28, 8); ctx.fill();
+      ctx.beginPath(); ctx.roundRect(x + 10, yy - 17, w - 20, 33, 8); ctx.fill();
       ctx.restore();
     }
     var col = mine ? '#ffd23f' : (i === 0 ? '#fff3dd' : '#dcd2c0');
-    text(String(i + 1).padStart(2, '0'), x + 26, yy, 19, col, { align: 'left', outline: 3 });
-    text(e.initials, x + 74, yy, 21, col, { align: 'left', outline: 3 });
-    text(String(e.score), x + w - 96, yy, 21, col, { align: 'right', outline: 3 });
-    text(fmtTime(e.time || 0), x + w - 20, yy, 17, mine ? '#ffe9a3' : '#a9d38f',
-         { align: 'right', outline: 3 });
+    text(String(i + 1).padStart(2, '0'), x + 24, yy - 3, 18, col, { align: 'left', outline: 3 });
+    text(ellipsise(nameOf(e), 19, nameW), nameX, yy - 5, 19, col, { align: 'left', outline: 3 });
+    var tm = teamOf(e);
+    if (tm) {
+      text(ellipsise(tm, 13, nameW), nameX, yy + 11, 13, mine ? '#ffe9a3' : '#9fb894',
+           { align: 'left', outline: 2 });
+    }
+    text(String(e.score), x + w - 68, yy - 4, 20, col, { align: 'right', outline: 3 });
+    text(fmtTime(e.time || 0), x + w - 68, yy + 12, 13, mine ? '#ffe9a3' : '#a9d38f',
+         { align: 'right', outline: 2 });
+  }
+}
+
+/* Trims a string until it fits `maxW` at `size`, with an ellipsis. */
+function ellipsise(str, size, maxW) {
+  str = String(str);
+  if (measure(str, size) <= maxW) return str;
+  var cut = str;
+  while (cut.length > 1 && measure(cut + '…', size) > maxW) cut = cut.slice(0, -1);
+  return cut + '…';
+}
+
+/* One labelled text box. `placeholder` is drawn dimmed when the field is
+   empty, so an unfilled name is obvious without being an error. */
+function drawNameField(label, value, placeholder, x, y, w, index) {
+  var sel = (gameOverPhase === 'name' && nameField === index);
+  var h = 42;
+  panel(x, y, w, h, 10,
+        sel ? 'rgba(255,210,63,0.18)' : 'rgba(255,255,255,0.07)',
+        sel ? '#ffd23f' : 'rgba(255,255,255,0.32)', 3);
+  text(label, x + 14, y + h / 2, 15, sel ? '#ffd23f' : '#cfe6c0',
+       { align: 'left', outline: 3 });
+
+  var tx = x + 104, tw = w - 118;
+  var shown = value ? ellipsise(value, 24, tw - 14) : placeholder;
+  text(shown, tx, y + h / 2 + 1, 24, value ? '#fff3dd' : 'rgba(255,243,221,0.35)',
+       { align: 'left', outline: 4 });
+
+  if (sel) {
+    var caretX = tx + Math.min(measure(shown, 24) + 6, tw);
+    ctx.save();
+    ctx.globalAlpha = 0.35 + 0.65 * Math.abs(Math.sin(T * 4));
+    ctx.fillStyle = '#ffd23f';
+    ctx.fillRect(caretX, y + 9, 3, h - 18);
+    ctx.restore();
   }
 }
 
@@ -2548,7 +2663,7 @@ function drawGameOver() {
   text('GAME OVER', 0, 0, 76, '#ff6b6b', { outline: 12, outlineColor: '#2b0a0a' });
   ctx.restore();
 
-  /* left: score + stats + initials */
+  /* left: score + stats + name entry */
   var lx = 210, ly = 178, lw = 470, lh = 452;
   panel(lx, ly, lw, lh, 22, 'rgba(18,10,4,0.86)', 'rgba(255,210,63,0.55)', 4);
 
@@ -2577,31 +2692,18 @@ function drawGameOver() {
     text(statRows[i][1], lx + lw - 34, rowY + i * step, 22, '#fff3dd', { align: 'right', outline: 3 });
   }
 
-  /* initials entry */
+  /* name entry */
   var iy = ly + lh - 78;
   if (gameOverPhase === 'name') {
-    text('ENTER YOUR INITIALS', lx + lw / 2, iy - 42, 19, '#ffd23f', { outline: 3 });
-    for (var s = 0; s < 3; s++) {
-      var bx = lx + lw / 2 - 96 + s * 66;
-      var sel = (s === initialSlot);
-      panel(bx - 27, iy - 27, 54, 58, 10,
-            sel ? 'rgba(255,210,63,0.22)' : 'rgba(255,255,255,0.08)',
-            sel ? '#ffd23f' : 'rgba(255,255,255,0.35)', 3);
-      text(initials[s], bx, iy + 1, 34, sel ? '#ffd23f' : '#fff3dd', { outline: 4 });
-      if (sel) {
-        ctx.save();
-        ctx.globalAlpha = 0.55 + 0.45 * Math.sin(T * 8);
-        text('▲', bx, iy - 44, 15, '#ffd23f', { outline: 0, shadow: false });
-        text('▼', bx, iy + 46, 15, '#ffd23f', { outline: 0, shadow: false });
-        ctx.restore();
-      }
-    }
-    text('↑↓ letter   ←→ slot   ENTER to save', lx + lw / 2, iy + 66, 17,
+    drawNameField('TEAM', teamName, DEFAULT_TEAM, lx + 30, ly + 326, lw - 60, 0);
+    drawNameField('PLAYER', playerName, 'YOUR NAME', lx + 30, ly + 374, lw - 60, 1);
+    text('TAB switch   ENTER to save', lx + lw / 2, ly + 434, 16,
          '#cfe6c0', { outline: 3 });
   } else if (gameOverPhase === 'done') {
     if (myRank >= 0) {
-      text('SAVED AS  ' + initials + '  ·  RANK #' + (myRank + 1), lx + lw / 2, iy - 6, 22,
-           '#9fe8ff', { outline: 4 });
+      var rankLine = 'SAVED AS  ' + playerName + '  ·  RANK #' + (myRank + 1);
+      text(ellipsise(rankLine, 22, lw - 40), lx + lw / 2, iy - 30, 22, '#9fe8ff', { outline: 4 });
+      text(teamName, lx + lw / 2, iy - 4, 17, '#9fb894', { outline: 3 });
     }
     ctx.save();
     ctx.globalAlpha = 0.65 + 0.35 * Math.sin(T * 4.5);
@@ -2706,6 +2808,10 @@ window.__game = {
   get timeScale() { return timeScale; },
   get menuIndex() { return menuIndex; },
   get pauseIndex() { return pauseIndex; },
+  get teamName() { return teamName; },
+  get playerName() { return playerName; },
+  get nameField() { return nameField; },
+  focusName: function (i) { nameField = i; },
   get tutorialStep() { return tutorialStep; },
   get autopilot() { return autopilot; },
   slowMo: function (m, d) { slowMo(m, d); },
